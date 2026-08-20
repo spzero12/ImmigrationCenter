@@ -39,10 +39,15 @@ function documentStatus(?string $expireDate, ?string $referenceDate = null): arr
 
 const DOCUMENT_COMMON_FIELDS = [
     'last_name', 'first_name', 'middle_name', 'citizenship', 'birth_date',
-    'position', 'department',
+    'position', 'department', 'organization',
     'passport_number', 'passport_series', 'passport_issued_by', 'passport_issue_date',
 ];
 
+// Используется только как подсказка по умолчанию при создании НОВОГО
+// документа (пока passport_document_id ещё не выбран) — см. спецификацию
+// фичи passport-centric-documents. Для уже сохранённого документа источник
+// паспортных полей — getLinkedPassport() по его собственному
+// passport_document_id, а не пересчёт "канонического" паспорта.
 function getCanonicalPassport(PDO $db, int $employeeId): ?array
 {
     $stmt = $db->prepare(
@@ -52,6 +57,29 @@ function getCanonicalPassport(PDO $db, int $employeeId): ?array
     $passport = $stmt->fetch();
 
     return $passport ?: null;
+}
+
+function getLinkedPassport(PDO $db, ?int $passportDocumentId): ?array
+{
+    if (!$passportDocumentId) {
+        return null;
+    }
+
+    $stmt = $db->prepare('SELECT * FROM employee_documents WHERE id = ?');
+    $stmt->execute([$passportDocumentId]);
+    $passport = $stmt->fetch();
+
+    return $passport ?: null;
+}
+
+function getEmployeePassports(PDO $db, int $employeeId): array
+{
+    $stmt = $db->prepare(
+        "SELECT * FROM employee_documents WHERE employee_id = ? AND type = 'passport' ORDER BY issue_date IS NULL, issue_date DESC"
+    );
+    $stmt->execute([$employeeId]);
+
+    return $stmt->fetchAll();
 }
 
 // Значения "единого источника" — как они есть в employees/паспорте сейчас,
@@ -66,6 +94,7 @@ function documentCommonFieldDefaults(array $employee, ?array $passport): array
         'birth_date' => $employee['birth_date'] ?? '',
         'position' => $employee['position'] ?? '',
         'department' => $employee['department'] ?? '',
+        'organization' => $employee['organization'] ?? '',
         'passport_number' => $passport['number'] ?? '',
         'passport_series' => $passport['series'] ?? '',
         'passport_issued_by' => $passport['issued_by'] ?? '',
@@ -116,6 +145,13 @@ function formatRuDate(?string $date): string
 // данные сотрудника (с учётом field_overrides) + данные самого документа.
 function documentTemplatePlaceholders(array $employee, array $document, ?array $passport): array
 {
+    // Паспорт не привязывается сам к себе (passport_document_id всегда
+    // NULL для type=passport) — при генерации самого паспорта его
+    // собственные поля и есть источник ${passport_*}.
+    if ($document['type'] === 'passport') {
+        $passport = $document;
+    }
+
     $common = documentEffectiveCommonFields($employee, $passport, $document['field_overrides'] ?? null);
 
     return [
@@ -127,6 +163,7 @@ function documentTemplatePlaceholders(array $employee, array $document, ?array $
         'birth_date' => formatRuDate($common['birth_date']),
         'position' => $common['position'],
         'department' => $common['department'],
+        'organization' => $common['organization'],
         'passport_number' => $common['passport_number'],
         'passport_series' => $common['passport_series'],
         'passport_issued_by' => $common['passport_issued_by'],

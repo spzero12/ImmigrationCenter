@@ -9,6 +9,7 @@ $document = [
     'id' => null,
     'employee_id' => (int) ($_GET['employee_id'] ?? 0),
     'type' => array_key_first(DOCUMENT_TYPE_LABELS),
+    'passport_document_id' => null,
     'number' => '',
     'series' => '',
     'issue_date' => '',
@@ -50,8 +51,23 @@ if (!$employee) {
     exit('Сотрудник не найден');
 }
 
-$passport = getCanonicalPassport($db, $employee['id']);
-$commonDefaults = documentCommonFieldDefaults($employee, $passport);
+$employeePassports = getEmployeePassports($db, $employee['id']);
+$defaultPassportId = $employeePassports[0]['id'] ?? null;
+
+// Без хотя бы одного паспорта нельзя создать никакой другой документ —
+// паспорт здесь обязательная точка входа (см. спецификацию фичи
+// passport-centric-documents).
+$availableTypes = (!$isEdit && empty($employeePassports))
+    ? ['passport' => DOCUMENT_TYPE_LABELS['passport']]
+    : DOCUMENT_TYPE_LABELS;
+
+if (!$isEdit && empty($employeePassports)) {
+    $document['type'] = 'passport';
+}
+
+if (!$isEdit && $document['passport_document_id'] === null) {
+    $document['passport_document_id'] = $defaultPassportId;
+}
 
 $error = null;
 
@@ -63,6 +79,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $document['expire_date'] = $_POST['expire_date'] ?: null;
     $document['issued_by'] = trim($_POST['issued_by'] ?? '');
     $document['notes'] = trim($_POST['notes'] ?? '');
+    $document['passport_document_id'] = $document['type'] === 'passport'
+        ? null
+        : ((int) ($_POST['passport_document_id'] ?? 0) ?: null);
+
+    $passportForDefaults = $document['type'] === 'passport'
+        ? null
+        : getLinkedPassport($db, $document['passport_document_id']);
+    $commonDefaults = documentCommonFieldDefaults($employee, $passportForDefaults);
 
     $submittedCommon = [];
     foreach (DOCUMENT_COMMON_FIELDS as $field) {
@@ -74,25 +98,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if (!array_key_exists($document['type'], DOCUMENT_TYPE_LABELS)) {
         $error = 'Выберите тип документа';
+    } elseif ($document['type'] !== 'passport' && empty($employeePassports)) {
+        $error = 'Сначала добавьте паспорт сотруднику — остальные документы привязываются к нему';
+    } elseif ($document['type'] !== 'passport' && !$document['passport_document_id']) {
+        $error = 'Выберите паспорт, к которому относится документ';
     } else {
         $label = DOCUMENT_TYPE_LABELS[$document['type']] . ' ' . $document['number'] . ' — ' . $employee['full_name'];
 
         if ($isEdit) {
             $stmt = $db->prepare(
-                'UPDATE employee_documents SET type = ?, number = ?, series = ?, issue_date = ?, expire_date = ?, issued_by = ?, notes = ?, field_overrides = ? WHERE id = ?'
+                'UPDATE employee_documents SET type = ?, passport_document_id = ?, number = ?, series = ?, issue_date = ?, expire_date = ?, issued_by = ?, notes = ?, field_overrides = ? WHERE id = ?'
             );
             $stmt->execute([
-                $document['type'], $document['number'], $document['series'],
+                $document['type'], $document['passport_document_id'], $document['number'], $document['series'],
                 $document['issue_date'], $document['expire_date'], $document['issued_by'],
                 $document['notes'], $overridesJson, $document['id'],
             ]);
             logAudit('update', 'employee_document', (int) $document['id'], $label);
         } else {
             $stmt = $db->prepare(
-                'INSERT INTO employee_documents (employee_id, type, number, series, issue_date, expire_date, issued_by, notes, field_overrides, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+                'INSERT INTO employee_documents (employee_id, type, passport_document_id, number, series, issue_date, expire_date, issued_by, notes, field_overrides, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
             );
             $stmt->execute([
-                $document['employee_id'], $document['type'], $document['number'], $document['series'],
+                $document['employee_id'], $document['type'], $document['passport_document_id'], $document['number'], $document['series'],
                 $document['issue_date'], $document['expire_date'], $document['issued_by'],
                 $document['notes'], $overridesJson, currentUser()['id'],
             ]);
@@ -104,6 +132,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
+$passport = $document['type'] === 'passport' ? null : getLinkedPassport($db, $document['passport_document_id']);
 $commonFields = documentEffectiveCommonFields($employee, $passport, $document['field_overrides']);
 
 $pageTitle = $isEdit ? 'Редактирование документа' : 'Новый документ';
@@ -123,15 +152,41 @@ require __DIR__ . '/includes/header.php';
                     <div class="alert alert-danger"><?php echo htmlspecialchars($error); ?></div>
                 <?php endif; ?>
 
+                <?php if (empty($employeePassports) && !$isEdit): ?>
+                    <div class="alert alert-info">
+                        У сотрудника ещё нет ни одного паспорта. Остальные типы
+                        документов (виза, патент, разрешение на работу, регистрация)
+                        привязываются к конкретному паспорту, поэтому сначала нужно
+                        добавить его.
+                    </div>
+                <?php endif; ?>
+
                 <form method="post">
                     <div class="mb-3">
                         <label class="form-label required">Тип документа</label>
-                        <select class="form-select" name="type" required>
-                            <?php foreach (DOCUMENT_TYPE_LABELS as $value => $label): ?>
+                        <select class="form-select" name="type" id="document-type" required <?php echo (empty($employeePassports) && !$isEdit) ? 'disabled' : ''; ?>>
+                            <?php foreach ($availableTypes as $value => $label): ?>
                                 <option value="<?php echo htmlspecialchars($value); ?>" <?php echo $document['type'] === $value ? 'selected' : ''; ?>><?php echo htmlspecialchars($label); ?></option>
                             <?php endforeach; ?>
                         </select>
+                        <?php if (empty($employeePassports) && !$isEdit): ?>
+                            <input type="hidden" name="type" value="passport">
+                        <?php endif; ?>
                     </div>
+
+                    <div class="mb-3" id="passport-select-wrapper" <?php echo $document['type'] === 'passport' ? 'style="display:none"' : ''; ?>>
+                        <label class="form-label required">Паспорт</label>
+                        <select class="form-select" name="passport_document_id">
+                            <?php foreach ($employeePassports as $employeePassport): ?>
+                                <option value="<?php echo (int) $employeePassport['id']; ?>" <?php echo (int) $document['passport_document_id'] === (int) $employeePassport['id'] ? 'selected' : ''; ?>>
+                                    №<?php echo htmlspecialchars($employeePassport['number'] ?: '—'); ?>
+                                    от <?php echo htmlspecialchars(formatRuDate($employeePassport['issue_date']) ?: '—'); ?>
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                        <div class="form-hint">Документ привязывается к конкретному паспорту — при выдаче сотруднику нового паспорта старые документы за ним не переезжают автоматически.</div>
+                    </div>
+
                     <div class="row">
                         <div class="col-md-6 mb-3">
                             <label class="form-label">Номер</label>
@@ -165,8 +220,8 @@ require __DIR__ . '/includes/header.php';
 
                     <h3 class="card-title">Общие данные сотрудника для этого документа</h3>
                     <p class="text-secondary">
-                        Предзаполнено из карточки сотрудника и его паспорта. Можно
-                        изменить только для этого документа (например, другая
+                        Предзаполнено из карточки сотрудника и выбранного выше паспорта.
+                        Можно изменить только для этого документа (например, другая
                         транслитерация в конкретной визе) — правки карточки
                         сотрудника сюда сами по себе не влияют, если поле здесь
                         уже отличается от неё.
@@ -196,11 +251,15 @@ require __DIR__ . '/includes/header.php';
                         </div>
                     </div>
                     <div class="row">
-                        <div class="col-md-6 mb-3">
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label">Организация</label>
+                            <input type="text" class="form-control" name="common_organization" value="<?php echo htmlspecialchars($commonFields['organization']); ?>">
+                        </div>
+                        <div class="col-md-4 mb-3">
                             <label class="form-label">Должность</label>
                             <input type="text" class="form-control" name="common_position" value="<?php echo htmlspecialchars($commonFields['position']); ?>">
                         </div>
-                        <div class="col-md-6 mb-3">
+                        <div class="col-md-4 mb-3">
                             <label class="form-label">Подразделение</label>
                             <input type="text" class="form-control" name="common_department" value="<?php echo htmlspecialchars($commonFields['department']); ?>">
                         </div>
@@ -292,5 +351,13 @@ require __DIR__ . '/includes/header.php';
         <?php endif; ?>
     </div>
 </div>
+
+<script>
+    $(function () {
+        $('#document-type').on('change', function () {
+            $('#passport-select-wrapper').toggle($(this).val() !== 'passport');
+        });
+    });
+</script>
 
 <?php require __DIR__ . '/includes/footer.php'; ?>

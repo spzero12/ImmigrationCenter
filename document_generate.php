@@ -49,7 +49,7 @@ if (!is_file($templatePath)) {
     );
 }
 
-$passport = getCanonicalPassport($db, $employee['id']);
+$passport = getLinkedPassport($db, $document['passport_document_id']);
 $fields = documentTemplatePlaceholders($employee, $document, $passport);
 
 $templateProcessor = new \PhpOffice\PhpWord\TemplateProcessor($templatePath);

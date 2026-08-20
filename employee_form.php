@@ -12,6 +12,7 @@ $employee = [
     'middle_name' => '',
     'citizenship' => '',
     'birth_date' => '',
+    'organization' => '',
     'position' => '',
     'department' => '',
     'phone' => '',
@@ -35,11 +36,18 @@ if ($isEdit) {
 }
 
 $employeeDocuments = [];
+$passportNumbersById = [];
 
 if ($isEdit) {
     $docsStmt = getDb()->prepare('SELECT * FROM employee_documents WHERE employee_id = ? ORDER BY expire_date IS NULL, expire_date ASC');
     $docsStmt->execute([$employee['id']]);
     $employeeDocuments = $docsStmt->fetchAll();
+
+    foreach ($employeeDocuments as $doc) {
+        if ($doc['type'] === 'passport') {
+            $passportNumbersById[$doc['id']] = $doc['number'];
+        }
+    }
 }
 
 $error = null;
@@ -50,6 +58,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $employee['middle_name'] = trim($_POST['middle_name'] ?? '');
     $employee['citizenship'] = trim($_POST['citizenship'] ?? '');
     $employee['birth_date'] = $_POST['birth_date'] ?: null;
+    $employee['organization'] = trim($_POST['organization'] ?? '');
     $employee['position'] = trim($_POST['position'] ?? '');
     $employee['department'] = trim($_POST['department'] ?? '');
     $employee['phone'] = trim($_POST['phone'] ?? '');
@@ -69,22 +78,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         if ($isEdit) {
             $stmt = $db->prepare(
-                'UPDATE employees SET full_name = ?, last_name = ?, first_name = ?, middle_name = ?, citizenship = ?, birth_date = ?, position = ?, department = ?, phone = ?, email = ?, notes = ? WHERE id = ?'
+                'UPDATE employees SET full_name = ?, last_name = ?, first_name = ?, middle_name = ?, citizenship = ?, birth_date = ?, organization = ?, position = ?, department = ?, phone = ?, email = ?, notes = ? WHERE id = ?'
             );
             $stmt->execute([
                 $fullName, $employee['last_name'], $employee['first_name'], $employee['middle_name'] ?: null,
-                $employee['citizenship'], $employee['birth_date'],
+                $employee['citizenship'], $employee['birth_date'], $employee['organization'],
                 $employee['position'], $employee['department'], $employee['phone'],
                 $employee['email'], $employee['notes'], $employee['id'],
             ]);
             logAudit('update', 'employee', (int) $employee['id'], $fullName);
         } else {
             $stmt = $db->prepare(
-                'INSERT INTO employees (full_name, last_name, first_name, middle_name, citizenship, birth_date, position, department, phone, email, notes, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+                'INSERT INTO employees (full_name, last_name, first_name, middle_name, citizenship, birth_date, organization, position, department, phone, email, notes, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
             );
             $stmt->execute([
                 $fullName, $employee['last_name'], $employee['first_name'], $employee['middle_name'] ?: null,
-                $employee['citizenship'], $employee['birth_date'],
+                $employee['citizenship'], $employee['birth_date'], $employee['organization'],
                 $employee['position'], $employee['department'], $employee['phone'],
                 $employee['email'], $employee['notes'], currentUser()['id'],
             ]);
@@ -138,11 +147,15 @@ require __DIR__ . '/includes/header.php';
                         </div>
                     </div>
                     <div class="row">
-                        <div class="col-md-6 mb-3">
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label">Организация</label>
+                            <input type="text" class="form-control" name="organization" value="<?php echo htmlspecialchars($employee['organization'] ?? ''); ?>">
+                        </div>
+                        <div class="col-md-4 mb-3">
                             <label class="form-label">Должность</label>
                             <input type="text" class="form-control" name="position" value="<?php echo htmlspecialchars($employee['position'] ?? ''); ?>">
                         </div>
-                        <div class="col-md-6 mb-3">
+                        <div class="col-md-4 mb-3">
                             <label class="form-label">Подразделение</label>
                             <input type="text" class="form-control" name="department" value="<?php echo htmlspecialchars($employee['department'] ?? ''); ?>">
                         </div>
@@ -187,6 +200,7 @@ require __DIR__ . '/includes/header.php';
                         <tr>
                             <th>Тип</th>
                             <th>Номер</th>
+                            <th>Паспорт</th>
                             <th>Срок действия</th>
                             <th>Статус</th>
                             <th></th>
@@ -194,11 +208,20 @@ require __DIR__ . '/includes/header.php';
                     </thead>
                     <tbody>
                         <?php if (empty($employeeDocuments)): ?>
-                            <tr><td colspan="5">Документов пока нет</td></tr>
+                            <tr><td colspan="6">Документов пока нет</td></tr>
                         <?php else: foreach ($employeeDocuments as $doc): $status = documentStatus($doc['expire_date']); ?>
                             <tr>
                                 <td><?php echo htmlspecialchars(DOCUMENT_TYPE_LABELS[$doc['type']] ?? $doc['type']); ?></td>
                                 <td><?php echo htmlspecialchars($doc['number'] ?? ''); ?></td>
+                                <td>
+                                    <?php if ($doc['type'] === 'passport'): ?>
+                                        —
+                                    <?php elseif ($doc['passport_document_id'] && isset($passportNumbersById[$doc['passport_document_id']])): ?>
+                                        №<?php echo htmlspecialchars($passportNumbersById[$doc['passport_document_id']] ?: '—'); ?>
+                                    <?php else: ?>
+                                        <span class="text-danger">не привязан</span>
+                                    <?php endif; ?>
+                                </td>
                                 <td><?php echo htmlspecialchars($doc['expire_date'] ?? '—'); ?></td>
                                 <td><span class="badge <?php echo $status['badgeClass']; ?>"><?php echo htmlspecialchars($status['label']); ?></span></td>
                                 <td class="text-end">

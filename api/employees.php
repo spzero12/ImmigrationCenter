@@ -1,6 +1,7 @@
 <?php
 
 require __DIR__ . '/../includes/auth.php';
+require_once __DIR__ . '/../includes/audit.php';
 
 header('Content-Type: application/json; charset=utf-8');
 
@@ -44,6 +45,15 @@ if ($method === 'DELETE') {
         http_response_code(400);
         echo json_encode(['error' => 'Некорректный id']);
         exit;
+    }
+
+    // Снимок full_name нужен до удаления — после него взять неоткуда.
+    $nameStmt = $db->prepare('SELECT full_name FROM employees WHERE id = ?');
+    $nameStmt->execute([$id]);
+    $employee = $nameStmt->fetch();
+
+    if ($employee) {
+        logAudit('delete', 'employee', $id, $employee['full_name']);
     }
 
     $stmt = $db->prepare('DELETE FROM employees WHERE id = ?');

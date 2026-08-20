@@ -35,6 +35,20 @@
                             <span class="nav-link-title">Документы</span>
                         </a>
                     </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="reports.php">
+                            <span class="nav-link-icon"><i class="ti ti-report"></i></span>
+                            <span class="nav-link-title">Отчёты</span>
+                        </a>
+                    </li>
+                    <?php if ($user['role'] === 'admin'): ?>
+                    <li class="nav-item">
+                        <a class="nav-link" href="audit_log.php">
+                            <span class="nav-link-icon"><i class="ti ti-history"></i></span>
+                            <span class="nav-link-title">Аудит</span>
+                        </a>
+                    </li>
+                    <?php endif; ?>
                 </ul>
                 <ul class="navbar-nav mt-auto pt-lg-3">
                     <li class="nav-item">

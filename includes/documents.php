@@ -12,13 +12,15 @@ const DOCUMENT_TYPE_LABELS = [
     'registration' => 'Регистрация по месту пребывания',
 ];
 
-function documentStatus(?string $expireDate): array
+function documentStatus(?string $expireDate, ?string $referenceDate = null): array
 {
     if (!$expireDate) {
         return ['key' => 'none', 'label' => 'Без срока', 'badgeClass' => 'bg-secondary-lt'];
     }
 
-    $daysLeft = (int) (new DateTimeImmutable('today'))
+    $reference = $referenceDate ? new DateTimeImmutable($referenceDate) : new DateTimeImmutable('today');
+
+    $daysLeft = (int) $reference
         ->diff(new DateTimeImmutable($expireDate))
         ->format('%r%a');
 

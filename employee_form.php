@@ -2,6 +2,7 @@
 
 require __DIR__ . '/includes/auth.php';
 require_once __DIR__ . '/includes/documents.php';
+require_once __DIR__ . '/includes/audit.php';
 requireLogin();
 
 $employee = [
@@ -76,6 +77,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $employee['position'], $employee['department'], $employee['phone'],
                 $employee['email'], $employee['notes'], $employee['id'],
             ]);
+            logAudit('update', 'employee', (int) $employee['id'], $fullName);
         } else {
             $stmt = $db->prepare(
                 'INSERT INTO employees (full_name, last_name, first_name, middle_name, citizenship, birth_date, position, department, phone, email, notes, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
@@ -86,6 +88,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $employee['position'], $employee['department'], $employee['phone'],
                 $employee['email'], $employee['notes'], currentUser()['id'],
             ]);
+            logAudit('create', 'employee', (int) $db->lastInsertId(), $fullName);
         }
 
         header('Location: employees.php');

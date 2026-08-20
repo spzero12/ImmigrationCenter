@@ -2,6 +2,7 @@
 
 require __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../includes/documents.php';
+require_once __DIR__ . '/../includes/audit.php';
 
 header('Content-Type: application/json; charset=utf-8');
 
@@ -64,6 +65,18 @@ if ($method === 'DELETE') {
         http_response_code(400);
         echo json_encode(['error' => 'Некорректный id']);
         exit;
+    }
+
+    // Снимок для entity_label нужен до удаления, вместе с именем сотрудника.
+    $labelStmt = $db->prepare(
+        'SELECT d.type, d.number, e.full_name AS employee_name FROM employee_documents d JOIN employees e ON e.id = d.employee_id WHERE d.id = ?'
+    );
+    $labelStmt->execute([$id]);
+    $document = $labelStmt->fetch();
+
+    if ($document) {
+        $typeLabel = DOCUMENT_TYPE_LABELS[$document['type']] ?? $document['type'];
+        logAudit('delete', 'employee_document', $id, $typeLabel . ' ' . $document['number'] . ' — ' . $document['employee_name']);
     }
 
     $stmt = $db->prepare('DELETE FROM employee_documents WHERE id = ?');

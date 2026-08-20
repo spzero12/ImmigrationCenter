@@ -2,6 +2,7 @@
 
 require __DIR__ . '/includes/auth.php';
 require_once __DIR__ . '/includes/documents.php';
+require_once __DIR__ . '/includes/audit.php';
 requireLogin();
 
 $document = [
@@ -74,6 +75,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!array_key_exists($document['type'], DOCUMENT_TYPE_LABELS)) {
         $error = 'Выберите тип документа';
     } else {
+        $label = DOCUMENT_TYPE_LABELS[$document['type']] . ' ' . $document['number'] . ' — ' . $employee['full_name'];
+
         if ($isEdit) {
             $stmt = $db->prepare(
                 'UPDATE employee_documents SET type = ?, number = ?, series = ?, issue_date = ?, expire_date = ?, issued_by = ?, notes = ?, field_overrides = ? WHERE id = ?'
@@ -83,6 +86,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $document['issue_date'], $document['expire_date'], $document['issued_by'],
                 $document['notes'], $overridesJson, $document['id'],
             ]);
+            logAudit('update', 'employee_document', (int) $document['id'], $label);
         } else {
             $stmt = $db->prepare(
                 'INSERT INTO employee_documents (employee_id, type, number, series, issue_date, expire_date, issued_by, notes, field_overrides, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
@@ -92,6 +96,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $document['issue_date'], $document['expire_date'], $document['issued_by'],
                 $document['notes'], $overridesJson, currentUser()['id'],
             ]);
+            logAudit('create', 'employee_document', (int) $db->lastInsertId(), $label);
         }
 
         header('Location: employee_form.php?id=' . $document['employee_id']);

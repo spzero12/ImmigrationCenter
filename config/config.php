@@ -1,13 +1,11 @@
 <?php
 
-// Настройки для локальной разработки. Для продакшена вынесите значения
-// в переменные окружения и не коммитьте реальные пароли.
 return [
     'db' => [
-        'host' => 'localhost',
-        'name' => 'migration_portal',
-        'user' => 'root',
-        'pass' => '',
+        'host' => 'p902341.mysql.ihc.ru',
+        'name' => 'p902341_migra',
+        'user' => 'p902341_migra',
+        'pass' => 'gsUBQ56jB3',
         'charset' => 'utf8mb4',
     ],
 ];

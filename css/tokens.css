@@ -2,9 +2,8 @@
  * Дизайн-токены портала.
  * Спецификация: .agent-os/specs/2026-08-20-design-system/spec.md
  *
- * Пока не подключён ни к одной странице — используется при переверстке
- * на Tabler (см. tasks.md той же папки), чтобы переопределить его
- * CSS-переменные --tblr-*, а не патчить исходники темы.
+ * Подключается в includes/header.php после tabler.min.css, чтобы
+ * переопределить его CSS-переменные --tblr-*, а не патчить исходники темы.
  */
 
 :root {
@@ -22,4 +21,9 @@
     --color-info: #0ea5e9;
 
     --font-size-base: 14px;
+
+    /* Переопределение переменных Tabler под палитру выше */
+    --tblr-primary: var(--color-primary);
+    --tblr-body-bg: var(--color-bg);
+    --tblr-font-size-base: var(--font-size-base);
 }

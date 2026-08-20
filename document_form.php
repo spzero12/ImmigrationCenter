@@ -23,43 +23,62 @@ $pageTitle = 'Документ сотрудника';
 require __DIR__ . '/includes/header.php';
 ?>
 
-<main class="container container--narrow">
-    <h1><?php echo htmlspecialchars($pageTitle); ?></h1>
+<div class="page-header d-print-none mb-3">
+    <h2 class="page-title"><?php echo htmlspecialchars($pageTitle); ?></h2>
+</div>
 
-    <p><!-- TODO: реализовать сохранение --> Раздел в разработке.</p>
+<div class="row justify-content-center">
+    <div class="col-lg-8">
+        <div class="card">
+            <div class="card-body">
+                <div class="alert alert-info"><!-- TODO: реализовать сохранение --> Раздел в разработке.</div>
 
-    <form method="post" class="form">
-        <label>Тип документа
-            <select name="type" required>
-                <?php foreach ($documentTypes as $value => $label): ?>
-                    <option value="<?php echo htmlspecialchars($value); ?>"><?php echo htmlspecialchars($label); ?></option>
-                <?php endforeach; ?>
-            </select>
-        </label>
-        <label>Номер
-            <input type="text" name="number">
-        </label>
-        <label>Серия
-            <input type="text" name="series">
-        </label>
-        <label>Дата выдачи
-            <input type="date" name="issue_date">
-        </label>
-        <label>Срок действия до
-            <input type="date" name="expire_date">
-        </label>
-        <label>Кем выдан
-            <input type="text" name="issued_by">
-        </label>
-        <label>Примечания
-            <textarea name="notes"></textarea>
-        </label>
+                <form method="post">
+                    <div class="mb-3">
+                        <label class="form-label required">Тип документа</label>
+                        <select class="form-select" name="type" required>
+                            <?php foreach ($documentTypes as $value => $label): ?>
+                                <option value="<?php echo htmlspecialchars($value); ?>"><?php echo htmlspecialchars($label); ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Номер</label>
+                            <input type="text" class="form-control" name="number">
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Серия</label>
+                            <input type="text" class="form-control" name="series">
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Дата выдачи</label>
+                            <input type="date" class="form-control" name="issue_date">
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Срок действия до</label>
+                            <input type="date" class="form-control" name="expire_date">
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Кем выдан</label>
+                        <input type="text" class="form-control" name="issued_by">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Примечания</label>
+                        <textarea class="form-control" name="notes" rows="3"></textarea>
+                    </div>
 
-        <div class="form-actions">
-            <button type="submit" disabled>Сохранить (TODO)</button>
-            <a href="documents.php" class="btn btn-secondary">Отмена</a>
+                    <div class="form-footer">
+                        <a href="documents.php" class="btn btn-link">Отмена</a>
+                        <button type="submit" class="btn btn-primary" disabled>Сохранить (TODO)</button>
+                    </div>
+                </form>
+            </div>
         </div>
-    </form>
-</main>
+    </div>
+</div>
 
 <?php require __DIR__ . '/includes/footer.php'; ?>

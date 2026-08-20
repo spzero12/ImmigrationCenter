@@ -76,44 +76,66 @@ $pageTitle = $isEdit ? 'Редактирование сотрудника' : 'Н
 require __DIR__ . '/includes/header.php';
 ?>
 
-<main class="container container--narrow">
-    <h1><?php echo htmlspecialchars($pageTitle); ?></h1>
+<div class="page-header d-print-none mb-3">
+    <h2 class="page-title"><?php echo htmlspecialchars($pageTitle); ?></h2>
+</div>
 
-    <?php if ($error): ?>
-        <p class="alert alert-error"><?php echo htmlspecialchars($error); ?></p>
-    <?php endif; ?>
+<div class="row justify-content-center">
+    <div class="col-lg-8">
+        <div class="card">
+            <div class="card-body">
+                <?php if ($error): ?>
+                    <div class="alert alert-danger"><?php echo htmlspecialchars($error); ?></div>
+                <?php endif; ?>
 
-    <form method="post" class="form">
-        <label>ФИО
-            <input type="text" name="full_name" value="<?php echo htmlspecialchars($employee['full_name']); ?>" required>
-        </label>
-        <label>Гражданство
-            <input type="text" name="citizenship" value="<?php echo htmlspecialchars($employee['citizenship'] ?? ''); ?>">
-        </label>
-        <label>Дата рождения
-            <input type="date" name="birth_date" value="<?php echo htmlspecialchars($employee['birth_date'] ?? ''); ?>">
-        </label>
-        <label>Должность
-            <input type="text" name="position" value="<?php echo htmlspecialchars($employee['position'] ?? ''); ?>">
-        </label>
-        <label>Подразделение
-            <input type="text" name="department" value="<?php echo htmlspecialchars($employee['department'] ?? ''); ?>">
-        </label>
-        <label>Телефон
-            <input type="text" name="phone" value="<?php echo htmlspecialchars($employee['phone'] ?? ''); ?>">
-        </label>
-        <label>Email
-            <input type="email" name="email" value="<?php echo htmlspecialchars($employee['email'] ?? ''); ?>">
-        </label>
-        <label>Примечания
-            <textarea name="notes"><?php echo htmlspecialchars($employee['notes'] ?? ''); ?></textarea>
-        </label>
+                <form method="post">
+                    <div class="mb-3">
+                        <label class="form-label required">ФИО</label>
+                        <input type="text" class="form-control" name="full_name" value="<?php echo htmlspecialchars($employee['full_name']); ?>" required>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Гражданство</label>
+                            <input type="text" class="form-control" name="citizenship" value="<?php echo htmlspecialchars($employee['citizenship'] ?? ''); ?>">
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Дата рождения</label>
+                            <input type="date" class="form-control" name="birth_date" value="<?php echo htmlspecialchars($employee['birth_date'] ?? ''); ?>">
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Должность</label>
+                            <input type="text" class="form-control" name="position" value="<?php echo htmlspecialchars($employee['position'] ?? ''); ?>">
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Подразделение</label>
+                            <input type="text" class="form-control" name="department" value="<?php echo htmlspecialchars($employee['department'] ?? ''); ?>">
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Телефон</label>
+                            <input type="text" class="form-control" name="phone" value="<?php echo htmlspecialchars($employee['phone'] ?? ''); ?>">
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Email</label>
+                            <input type="email" class="form-control" name="email" value="<?php echo htmlspecialchars($employee['email'] ?? ''); ?>">
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Примечания</label>
+                        <textarea class="form-control" name="notes" rows="3"><?php echo htmlspecialchars($employee['notes'] ?? ''); ?></textarea>
+                    </div>
 
-        <div class="form-actions">
-            <button type="submit">Сохранить</button>
-            <a href="employees.php" class="btn btn-secondary">Отмена</a>
+                    <div class="form-footer">
+                        <a href="employees.php" class="btn btn-link">Отмена</a>
+                        <button type="submit" class="btn btn-primary">Сохранить</button>
+                    </div>
+                </form>
+            </div>
         </div>
-    </form>
-</main>
+    </div>
+</div>
 
 <?php require __DIR__ . '/includes/footer.php'; ?>

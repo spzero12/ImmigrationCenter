@@ -1,34 +1,43 @@
 # Задачи: Дизайн-система портала
 
-## Подготовка (этот шаг)
+## Подготовка
 
 - [x] Спецификация ([spec.md](spec.md)).
-- [x] Дизайн-токены `css/tokens.css` (палитра, пока не подключены).
+- [x] Дизайн-токены `css/tokens.css` (палитра).
 
 ## Реализация
 
-- [ ] Подключить Tabler (CSS, JS, иконки) через CDN в `includes/header.php` /
-      `includes/footer.php`, следом — `css/tokens.css` (чтобы переопределить
-      `--tblr-*`).
-- [ ] `includes/header.php` — layout Tabler: navbar + сайдбар («Сотрудники»,
-      «Документы»), сворачиваемый на мобильных.
-- [ ] `login.php` — карточка входа в стиле Tabler (`auth`-обёртка).
-- [ ] `employees.php` — таблица `table-sm`, поиск как `input-icon`, кнопка
-      «Добавить» как Tabler `btn btn-primary`.
-- [ ] `employee_form.php` — форма в `card`, поля через Tabler `form-*`
-      классы.
-- [ ] `documents.php` — таблица со статусами как Tabler `badge` в цветах
-      success/warning/danger/info из `css/tokens.css`.
-- [ ] `document_form.php` — форма аналогично `employee_form.php`.
-- [ ] Проверить, что `js/employees.js` и `js/documents.js` продолжают
-      работать (селекторы `#employees-table`, `#documents-table`,
-      `#employee-search` и т.д. не переименовывать без правки JS).
-- [ ] Проверить адаптивность: мобильный, планшет, десктоп.
-- [ ] Обновить `deploy/` после переверстки (см. workflow выкладки).
+- [x] Подключён Tabler 1.4.0 (CSS, JS) и `@tabler/icons-webfont` 3.46.0 через
+      CDN (jsDelivr, версии проверены на доступность) в `includes/header.php`
+      / `includes/footer.php`, следом — `css/tokens.css` (переопределяет
+      `--tblr-primary`, `--tblr-body-bg`, `--tblr-font-size-base`).
+- [x] `includes/header.php` — layout Tabler: `navbar-vertical` сайдбар
+      («Сотрудники», «Документы», пользователь, выход), сворачивается в
+      бургер-меню на мобильных/планшетах (`navbar-expand-lg`).
+- [x] `login.php` — карточка входа (`container-tight` + `card`).
+- [x] `employees.php` — `card` с таблицей `table-sm`, поиск как
+      `input-icon`, кнопка «Добавить» как `btn btn-primary`.
+- [x] `employee_form.php` — форма в `card`, поля через Tabler `form-*`.
+- [x] `documents.php` — обёрнута в `card`/`table-sm`; примеры классов
+      бейджей статусов (`bg-danger-lt`/`bg-warning-lt`/`bg-success-lt`/
+      `bg-secondary-lt`) оставлены комментарием — сам рендеринг статусов
+      всё ещё TODO вместе с `api/documents.php` (см. spec фичи
+      migration-documents).
+- [x] `document_form.php` — форма аналогично `employee_form.php`.
+- [x] `js/employees.js`/`js/documents.js` не менялись — используемые ими
+      селекторы (`#employees-table`, `#documents-table`,
+      `#employee-search`) и классы кнопок (`btn btn-danger btn-sm`)
+      сохранены в новой разметке, это стандартные классы Bootstrap/Tabler.
+- [x] Старые конфликтующие правила (`.btn`, `.table`, `.form`,
+      `.site-header` и др.) убраны из `css/style.css`, чтобы не
+      переопределять стили Tabler, подключённые раньше по каскаду.
+- [x] `deploy/` пересобран под новую вёрстку.
 
-## Проверка
+## Проверка (требует ручной проверки — PHP не установлен в этой среде)
 
-- [ ] Все существующие функции (логин, CRUD сотрудников, список документов)
-      визуально в новом стиле, но без потери функциональности.
-- [ ] Плотность: на экране 1366×768 в таблице сотрудников помещается
-      заметно больше строк, чем в текущей вёрстке.
+- [ ] Визуально открыть логин, список/форму сотрудников, список/форму
+      документов в браузере и убедиться, что вся функциональность жива
+      (поиск, удаление сотрудника, сохранение карточки).
+- [ ] Проверить адаптивность: сворачивание сайдбара на мобильном/планшете.
+- [ ] Плотность: на экране 1366×768 в таблице сотрудников заметно больше
+      строк, чем в старой вёрстке.

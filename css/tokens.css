@@ -1,0 +1,25 @@
+/*
+ * Дизайн-токены портала.
+ * Спецификация: .agent-os/specs/2026-08-20-design-system/spec.md
+ *
+ * Пока не подключён ни к одной странице — используется при переверстке
+ * на Tabler (см. tasks.md той же папки), чтобы переопределить его
+ * CSS-переменные --tblr-*, а не патчить исходники темы.
+ */
+
+:root {
+    --color-primary: #2563eb;
+    --color-bg: #f4f6fa;
+    --color-surface: #ffffff;
+    --color-border: #e5e7eb;
+    --color-text: #1f2937;
+    --color-text-muted: #6b7280;
+
+    /* Статусы документов — переиспользуются фичей migration-documents */
+    --color-success: #16a34a;
+    --color-warning: #d97706;
+    --color-danger: #dc2626;
+    --color-info: #0ea5e9;
+
+    --font-size-base: 14px;
+}

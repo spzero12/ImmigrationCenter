@@ -1,2 +1,5 @@
 /deploy/
 /config.php
+/vendor/
+/uploads/documents/*
+!/uploads/documents/.gitkeep

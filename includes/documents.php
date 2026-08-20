@@ -32,3 +32,109 @@ function documentStatus(?string $expireDate): array
 
     return ['key' => 'valid', 'label' => 'В порядке', 'badgeClass' => 'bg-success-lt'];
 }
+
+// Фича "Генерация документов": .agent-os/specs/2026-08-20-document-generation/spec.md
+
+const DOCUMENT_COMMON_FIELDS = [
+    'last_name', 'first_name', 'middle_name', 'citizenship', 'birth_date',
+    'position', 'department',
+    'passport_number', 'passport_series', 'passport_issued_by', 'passport_issue_date',
+];
+
+function getCanonicalPassport(PDO $db, int $employeeId): ?array
+{
+    $stmt = $db->prepare(
+        'SELECT * FROM employee_documents WHERE employee_id = ? AND type = ? ORDER BY issue_date IS NULL, issue_date DESC LIMIT 1'
+    );
+    $stmt->execute([$employeeId, 'passport']);
+    $passport = $stmt->fetch();
+
+    return $passport ?: null;
+}
+
+// Значения "единого источника" — как они есть в employees/паспорте сейчас,
+// без учёта переопределений конкретного документа.
+function documentCommonFieldDefaults(array $employee, ?array $passport): array
+{
+    return [
+        'last_name' => $employee['last_name'] ?? '',
+        'first_name' => $employee['first_name'] ?? '',
+        'middle_name' => $employee['middle_name'] ?? '',
+        'citizenship' => $employee['citizenship'] ?? '',
+        'birth_date' => $employee['birth_date'] ?? '',
+        'position' => $employee['position'] ?? '',
+        'department' => $employee['department'] ?? '',
+        'passport_number' => $passport['number'] ?? '',
+        'passport_series' => $passport['series'] ?? '',
+        'passport_issued_by' => $passport['issued_by'] ?? '',
+        'passport_issue_date' => $passport['issue_date'] ?? '',
+    ];
+}
+
+// Значения "по умолчанию" с наложенными поверх field_overrides конкретного
+// документа — то, что реально нужно показать в форме документа.
+function documentEffectiveCommonFields(array $employee, ?array $passport, ?string $overridesJson): array
+{
+    $fields = documentCommonFieldDefaults($employee, $passport);
+    $overrides = $overridesJson ? (json_decode($overridesJson, true) ?: []) : [];
+
+    return array_merge($fields, array_intersect_key($overrides, $fields));
+}
+
+// Из отправленных пользователем значений формы оставляет только те, что
+// реально отличаются от единого источника — это и есть то, что нужно
+// сохранить в field_overrides (пустой массив, если ничего не менялось).
+function documentBuildOverrides(array $submitted, array $defaults): array
+{
+    $overrides = [];
+
+    foreach (DOCUMENT_COMMON_FIELDS as $field) {
+        $value = trim($submitted[$field] ?? '');
+
+        if ($value !== ($defaults[$field] ?? '')) {
+            $overrides[$field] = $value;
+        }
+    }
+
+    return $overrides;
+}
+
+function formatRuDate(?string $date): string
+{
+    if (!$date) {
+        return '';
+    }
+
+    $parsed = DateTimeImmutable::createFromFormat('Y-m-d', $date);
+
+    return $parsed ? $parsed->format('d.m.Y') : $date;
+}
+
+// Полный набор плейсхолдеров для document_generate.php: эффективные общие
+// данные сотрудника (с учётом field_overrides) + данные самого документа.
+function documentTemplatePlaceholders(array $employee, array $document, ?array $passport): array
+{
+    $common = documentEffectiveCommonFields($employee, $passport, $document['field_overrides'] ?? null);
+
+    return [
+        'last_name' => $common['last_name'],
+        'first_name' => $common['first_name'],
+        'middle_name' => $common['middle_name'],
+        'full_name' => trim($common['last_name'] . ' ' . $common['first_name'] . ' ' . $common['middle_name']),
+        'citizenship' => $common['citizenship'],
+        'birth_date' => formatRuDate($common['birth_date']),
+        'position' => $common['position'],
+        'department' => $common['department'],
+        'passport_number' => $common['passport_number'],
+        'passport_series' => $common['passport_series'],
+        'passport_issued_by' => $common['passport_issued_by'],
+        'passport_issue_date' => formatRuDate($common['passport_issue_date']),
+        'document_type' => DOCUMENT_TYPE_LABELS[$document['type']] ?? $document['type'],
+        'document_number' => $document['number'] ?? '',
+        'document_series' => $document['series'] ?? '',
+        'issue_date' => formatRuDate($document['issue_date'] ?? null),
+        'expire_date' => formatRuDate($document['expire_date'] ?? null),
+        'issued_by' => $document['issued_by'] ?? '',
+        'generated_date' => formatRuDate(date('Y-m-d')),
+    ];
+}

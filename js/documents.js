@@ -40,6 +40,7 @@ $(function () {
                 '<td><span class="badge ' + doc.status.badgeClass + '">' + escapeHtml(doc.status.label) + '</span></td>' +
                 '<td class="text-end">' +
                 '<a href="document_form.php?id=' + encodeURIComponent(doc.id) + '&employee_id=' + encodeURIComponent(doc.employee_id) + '">Изменить</a> ' +
+                '<a href="document_generate.php?document_id=' + encodeURIComponent(doc.id) + '">Скачать .docx</a> ' +
                 deleteBtn +
                 '</td>'
             );

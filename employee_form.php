@@ -6,7 +6,9 @@ requireLogin();
 
 $employee = [
     'id' => null,
-    'full_name' => '',
+    'last_name' => '',
+    'first_name' => '',
+    'middle_name' => '',
     'citizenship' => '',
     'birth_date' => '',
     'position' => '',
@@ -42,7 +44,9 @@ if ($isEdit) {
 $error = null;
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $employee['full_name'] = trim($_POST['full_name'] ?? '');
+    $employee['last_name'] = trim($_POST['last_name'] ?? '');
+    $employee['first_name'] = trim($_POST['first_name'] ?? '');
+    $employee['middle_name'] = trim($_POST['middle_name'] ?? '');
     $employee['citizenship'] = trim($_POST['citizenship'] ?? '');
     $employee['birth_date'] = $_POST['birth_date'] ?: null;
     $employee['position'] = trim($_POST['position'] ?? '');
@@ -51,26 +55,34 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $employee['email'] = trim($_POST['email'] ?? '');
     $employee['notes'] = trim($_POST['notes'] ?? '');
 
-    if ($employee['full_name'] === '') {
-        $error = 'Укажите ФИО сотрудника';
+    // full_name — производное значение, собирается из частей ниже, а не
+    // вводится напрямую (единый источник данных, см. спецификацию фичи
+    // document-generation) — существующий код (список, поиск, api/*)
+    // продолжает читать full_name как раньше.
+    $fullName = trim($employee['last_name'] . ' ' . $employee['first_name'] . ' ' . $employee['middle_name']);
+
+    if ($employee['last_name'] === '' || $employee['first_name'] === '') {
+        $error = 'Укажите фамилию и имя сотрудника';
     } else {
         $db = getDb();
 
         if ($isEdit) {
             $stmt = $db->prepare(
-                'UPDATE employees SET full_name = ?, citizenship = ?, birth_date = ?, position = ?, department = ?, phone = ?, email = ?, notes = ? WHERE id = ?'
+                'UPDATE employees SET full_name = ?, last_name = ?, first_name = ?, middle_name = ?, citizenship = ?, birth_date = ?, position = ?, department = ?, phone = ?, email = ?, notes = ? WHERE id = ?'
             );
             $stmt->execute([
-                $employee['full_name'], $employee['citizenship'], $employee['birth_date'],
+                $fullName, $employee['last_name'], $employee['first_name'], $employee['middle_name'] ?: null,
+                $employee['citizenship'], $employee['birth_date'],
                 $employee['position'], $employee['department'], $employee['phone'],
                 $employee['email'], $employee['notes'], $employee['id'],
             ]);
         } else {
             $stmt = $db->prepare(
-                'INSERT INTO employees (full_name, citizenship, birth_date, position, department, phone, email, notes, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
+                'INSERT INTO employees (full_name, last_name, first_name, middle_name, citizenship, birth_date, position, department, phone, email, notes, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
             );
             $stmt->execute([
-                $employee['full_name'], $employee['citizenship'], $employee['birth_date'],
+                $fullName, $employee['last_name'], $employee['first_name'], $employee['middle_name'] ?: null,
+                $employee['citizenship'], $employee['birth_date'],
                 $employee['position'], $employee['department'], $employee['phone'],
                 $employee['email'], $employee['notes'], currentUser()['id'],
             ]);
@@ -98,9 +110,19 @@ require __DIR__ . '/includes/header.php';
                 <?php endif; ?>
 
                 <form method="post">
-                    <div class="mb-3">
-                        <label class="form-label required">ФИО</label>
-                        <input type="text" class="form-control" name="full_name" value="<?php echo htmlspecialchars($employee['full_name']); ?>" required>
+                    <div class="row">
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label required">Фамилия</label>
+                            <input type="text" class="form-control" name="last_name" value="<?php echo htmlspecialchars($employee['last_name']); ?>" required>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label required">Имя</label>
+                            <input type="text" class="form-control" name="first_name" value="<?php echo htmlspecialchars($employee['first_name']); ?>" required>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label">Отчество</label>
+                            <input type="text" class="form-control" name="middle_name" value="<?php echo htmlspecialchars($employee['middle_name'] ?? ''); ?>">
+                        </div>
                     </div>
                     <div class="row">
                         <div class="col-md-6 mb-3">
@@ -178,6 +200,7 @@ require __DIR__ . '/includes/header.php';
                                 <td><span class="badge <?php echo $status['badgeClass']; ?>"><?php echo htmlspecialchars($status['label']); ?></span></td>
                                 <td class="text-end">
                                     <a href="document_form.php?id=<?php echo (int) $doc['id']; ?>&employee_id=<?php echo (int) $employee['id']; ?>">Изменить</a>
+                                    <a href="document_generate.php?document_id=<?php echo (int) $doc['id']; ?>" class="ms-2">Скачать .docx</a>
                                     <?php if (in_array(currentUser()['role'], ['admin', 'hr'], true)): ?>
                                         <button type="button" class="btn btn-danger btn-sm ms-2" data-delete-document="<?php echo (int) $doc['id']; ?>">Удалить</button>
                                     <?php endif; ?>

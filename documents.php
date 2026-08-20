@@ -1,8 +1,5 @@
 <?php
 
-// Заглушка страницы фичи "Миграционный учёт" (сводный список документов).
-// Спецификация: .agent-os/specs/2026-08-20-migration-documents/spec.md
-
 require __DIR__ . '/includes/auth.php';
 requireLogin();
 
@@ -15,10 +12,41 @@ require __DIR__ . '/includes/header.php';
     <h2 class="page-title">Разрешительные документы</h2>
 </div>
 
-<!-- TODO: фильтр по статусу (просрочен / скоро истекает / все) и
-     поиск по сотруднику — см. tasks.md фичи migration-documents -->
+<div class="row row-deck row-cards mb-3">
+    <div class="col-sm-6 col-lg-3">
+        <div class="card card-sm">
+            <div class="card-body">
+                <div class="subheader">Просрочено</div>
+                <div class="h1 mb-0 text-danger" id="stat-expired">—</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-sm-6 col-lg-3">
+        <div class="card card-sm">
+            <div class="card-body">
+                <div class="subheader">Скоро истекает</div>
+                <div class="h1 mb-0 text-warning" id="stat-expiring">—</div>
+            </div>
+        </div>
+    </div>
+</div>
 
 <div class="card">
+    <div class="card-header">
+        <div class="input-icon w-auto">
+            <span class="input-icon-addon"><i class="ti ti-search"></i></span>
+            <input type="text" id="document-search" class="form-control" placeholder="Поиск по сотруднику...">
+        </div>
+        <div class="card-actions">
+            <select id="document-status-filter" class="form-select w-auto">
+                <option value="">Все статусы</option>
+                <option value="expired">Просрочен</option>
+                <option value="expiring_soon">Скоро истекает</option>
+                <option value="valid">В порядке</option>
+                <option value="none">Без срока</option>
+            </select>
+        </div>
+    </div>
     <div class="table-responsive">
         <table class="table table-vcenter table-sm card-table" id="documents-table">
             <thead>
@@ -32,17 +60,14 @@ require __DIR__ . '/includes/header.php';
                 </tr>
             </thead>
             <tbody>
-                <!--
-                    Пример разметки статусов для js/documents.js (см. tasks.md):
-                    <span class="badge bg-danger-lt">Просрочен</span>
-                    <span class="badge bg-warning-lt">Скоро истекает</span>
-                    <span class="badge bg-success-lt">В порядке</span>
-                    <span class="badge bg-secondary-lt">Без срока</span>
-                -->
-                <tr><td colspan="6">TODO: реализовать загрузку списка (api/documents.php)</td></tr>
+                <tr><td colspan="6">Загрузка...</td></tr>
             </tbody>
         </table>
     </div>
 </div>
+
+<script>
+    const CAN_DELETE = <?php echo in_array(currentUser()['role'], ['admin', 'hr'], true) ? 'true' : 'false'; ?>;
+</script>
 
 <?php require __DIR__ . '/includes/footer.php'; ?>

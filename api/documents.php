@@ -1,10 +1,7 @@
 <?php
 
-// Заглушка API для фичи "Миграционный учёт" (документы и сроки).
-// Спецификация: .agent-os/specs/2026-08-20-migration-documents/spec.md
-// Реализация — по чек-листу в tasks.md той же папки.
-
 require __DIR__ . '/../includes/auth.php';
+require_once __DIR__ . '/../includes/documents.php';
 
 header('Content-Type: application/json; charset=utf-8');
 
@@ -17,33 +14,64 @@ if (!currentUser()) {
 $db = getDb();
 $method = $_SERVER['REQUEST_METHOD'];
 
-switch ($method) {
-    case 'GET':
-        // TODO: список документов, фильтры employee_id / status
-        // (см. tasks.md — вычисление статуса по expire_date).
-        http_response_code(501);
-        echo json_encode(['error' => 'Not implemented']);
-        break;
+if ($method === 'GET') {
+    $employeeId = isset($_GET['employee_id']) ? (int) $_GET['employee_id'] : null;
+    $q = trim($_GET['q'] ?? '');
 
-    case 'POST':
-        // TODO: создание документа сотрудника.
-        http_response_code(501);
-        echo json_encode(['error' => 'Not implemented']);
-        break;
+    $sql = 'SELECT d.*, e.full_name AS employee_name
+            FROM employee_documents d
+            JOIN employees e ON e.id = d.employee_id
+            WHERE 1 = 1';
+    $params = [];
 
-    case 'PUT':
-        // TODO: обновление документа.
-        http_response_code(501);
-        echo json_encode(['error' => 'Not implemented']);
-        break;
+    if ($employeeId) {
+        $sql .= ' AND d.employee_id = ?';
+        $params[] = $employeeId;
+    }
 
-    case 'DELETE':
-        // TODO: удаление документа, роли admin/hr.
-        http_response_code(501);
-        echo json_encode(['error' => 'Not implemented']);
-        break;
+    if ($q !== '') {
+        $sql .= ' AND e.full_name LIKE ?';
+        $params[] = "%{$q}%";
+    }
 
-    default:
-        http_response_code(405);
-        echo json_encode(['error' => 'Метод не поддерживается']);
+    $sql .= ' ORDER BY d.expire_date IS NULL, d.expire_date ASC, e.full_name';
+
+    $stmt = $db->prepare($sql);
+    $stmt->execute($params);
+
+    $documents = array_map(static function (array $row): array {
+        $row['type_label'] = DOCUMENT_TYPE_LABELS[$row['type']] ?? $row['type'];
+        $row['status'] = documentStatus($row['expire_date']);
+
+        return $row;
+    }, $stmt->fetchAll());
+
+    echo json_encode($documents);
+    exit;
 }
+
+if ($method === 'DELETE') {
+    if (!in_array(currentUser()['role'], ['admin', 'hr'], true)) {
+        http_response_code(403);
+        echo json_encode(['error' => 'Недостаточно прав']);
+        exit;
+    }
+
+    parse_str(file_get_contents('php://input'), $params);
+    $id = (int) ($params['id'] ?? 0);
+
+    if ($id <= 0) {
+        http_response_code(400);
+        echo json_encode(['error' => 'Некорректный id']);
+        exit;
+    }
+
+    $stmt = $db->prepare('DELETE FROM employee_documents WHERE id = ?');
+    $stmt->execute([$id]);
+
+    echo json_encode(['success' => true]);
+    exit;
+}
+
+http_response_code(405);
+echo json_encode(['error' => 'Метод не поддерживается']);

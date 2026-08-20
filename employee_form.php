@@ -1,6 +1,7 @@
 <?php
 
 require __DIR__ . '/includes/auth.php';
+require_once __DIR__ . '/includes/documents.php';
 requireLogin();
 
 $employee = [
@@ -28,6 +29,14 @@ if ($isEdit) {
     }
 
     $employee = $found;
+}
+
+$employeeDocuments = [];
+
+if ($isEdit) {
+    $docsStmt = getDb()->prepare('SELECT * FROM employee_documents WHERE employee_id = ? ORDER BY expire_date IS NULL, expire_date ASC');
+    $docsStmt->execute([$employee['id']]);
+    $employeeDocuments = $docsStmt->fetchAll();
 }
 
 $error = null;
@@ -135,6 +144,70 @@ require __DIR__ . '/includes/header.php';
                 </form>
             </div>
         </div>
+
+        <?php if ($isEdit): ?>
+        <div class="card mt-3">
+            <div class="card-header">
+                <h3 class="card-title">Документы сотрудника</h3>
+                <div class="card-actions">
+                    <a href="document_form.php?employee_id=<?php echo (int) $employee['id']; ?>" class="btn btn-primary btn-sm">
+                        <i class="ti ti-plus"></i>
+                        Добавить документ
+                    </a>
+                </div>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-vcenter table-sm card-table">
+                    <thead>
+                        <tr>
+                            <th>Тип</th>
+                            <th>Номер</th>
+                            <th>Срок действия</th>
+                            <th>Статус</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php if (empty($employeeDocuments)): ?>
+                            <tr><td colspan="5">Документов пока нет</td></tr>
+                        <?php else: foreach ($employeeDocuments as $doc): $status = documentStatus($doc['expire_date']); ?>
+                            <tr>
+                                <td><?php echo htmlspecialchars(DOCUMENT_TYPE_LABELS[$doc['type']] ?? $doc['type']); ?></td>
+                                <td><?php echo htmlspecialchars($doc['number'] ?? ''); ?></td>
+                                <td><?php echo htmlspecialchars($doc['expire_date'] ?? '—'); ?></td>
+                                <td><span class="badge <?php echo $status['badgeClass']; ?>"><?php echo htmlspecialchars($status['label']); ?></span></td>
+                                <td class="text-end">
+                                    <a href="document_form.php?id=<?php echo (int) $doc['id']; ?>&employee_id=<?php echo (int) $employee['id']; ?>">Изменить</a>
+                                    <?php if (in_array(currentUser()['role'], ['admin', 'hr'], true)): ?>
+                                        <button type="button" class="btn btn-danger btn-sm ms-2" data-delete-document="<?php echo (int) $doc['id']; ?>">Удалить</button>
+                                    <?php endif; ?>
+                                </td>
+                            </tr>
+                        <?php endforeach; endif; ?>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <script>
+            $(function () {
+                $('[data-delete-document]').on('click', function () {
+                    if (!confirm('Удалить документ?')) {
+                        return;
+                    }
+
+                    const id = $(this).data('delete-document');
+
+                    $.ajax({
+                        url: 'api/documents.php',
+                        method: 'DELETE',
+                        data: { id: id },
+                    }).done(function () {
+                        location.reload();
+                    });
+                });
+            });
+        </script>
+        <?php endif; ?>
     </div>
 </div>
 

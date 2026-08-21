@@ -5,3 +5,9 @@
  * эти классы предоставляет сама тема, дублирование только конфликтовало
  * бы с её стилями.
  */
+
+/* Строки-разделители групп в таблицах (documents.php, employees.php). */
+.table-group-header td {
+    background: var(--tblr-bg-surface-secondary, #f4f6fa);
+    font-weight: 600;
+}

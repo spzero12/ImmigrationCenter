@@ -48,6 +48,12 @@
                             <span class="nav-link-title">Аудит</span>
                         </a>
                     </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="users.php">
+                            <span class="nav-link-icon"><i class="ti ti-user-cog"></i></span>
+                            <span class="nav-link-title">Пользователи</span>
+                        </a>
+                    </li>
                     <?php endif; ?>
                 </ul>
                 <ul class="navbar-nav mt-auto pt-lg-3">

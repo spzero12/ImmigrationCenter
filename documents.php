@@ -51,7 +51,6 @@ require __DIR__ . '/includes/header.php';
         <table class="table table-vcenter table-sm card-table" id="documents-table">
             <thead>
                 <tr>
-                    <th>Сотрудник</th>
                     <th>Тип документа</th>
                     <th>Номер</th>
                     <th>Срок действия</th>
@@ -60,7 +59,7 @@ require __DIR__ . '/includes/header.php';
                 </tr>
             </thead>
             <tbody>
-                <tr><td colspan="6">Загрузка...</td></tr>
+                <tr><td colspan="5">Загрузка...</td></tr>
             </tbody>
         </table>
     </div>

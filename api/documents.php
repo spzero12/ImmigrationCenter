@@ -35,7 +35,10 @@ if ($method === 'GET') {
         $params[] = "%{$q}%";
     }
 
-    $sql .= ' ORDER BY d.expire_date IS NULL, d.expire_date ASC, e.full_name';
+    // Сортировка по сотруднику в первую очередь — documents.php группирует
+    // строки по ФИО, для чего одинаковые сотрудники должны идти подряд;
+    // внутри сотрудника — как раньше, по сроку действия.
+    $sql .= ' ORDER BY e.full_name, d.expire_date IS NULL, d.expire_date ASC';
 
     $stmt = $db->prepare($sql);
     $stmt->execute($params);

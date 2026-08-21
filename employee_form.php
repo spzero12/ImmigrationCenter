@@ -110,7 +110,14 @@ require __DIR__ . '/includes/header.php';
 ?>
 
 <div class="page-header d-print-none mb-3">
-    <h2 class="page-title"><?php echo htmlspecialchars($pageTitle); ?></h2>
+    <div class="d-flex align-items-center gap-3">
+        <?php if (!empty($employee['photo_stored_name'])): ?>
+            <span class="avatar avatar-lg rounded" style="background-image: url(employee_photo.php?employee_id=<?php echo (int) $employee['id']; ?>)"></span>
+        <?php else: ?>
+            <span class="avatar avatar-lg rounded"><?php echo htmlspecialchars(mb_substr($employee['last_name'] ?? '', 0, 1) . mb_substr($employee['first_name'] ?? '', 0, 1)); ?></span>
+        <?php endif; ?>
+        <h2 class="page-title mb-0"><?php echo htmlspecialchars($pageTitle); ?></h2>
+    </div>
 </div>
 
 <div class="row justify-content-center">
@@ -184,6 +191,39 @@ require __DIR__ . '/includes/header.php';
         </div>
 
         <?php if ($isEdit): ?>
+        <div class="card mt-3">
+            <div class="card-header">
+                <h3 class="card-title">Фото</h3>
+            </div>
+            <div class="card-body">
+                <?php if (isset($_GET['photo_error'])): ?>
+                    <div class="alert alert-danger">
+                        <?php
+                        $photoErrors = [
+                            'type' => 'Недопустимый формат файла — только JPG или PNG.',
+                            'size' => 'Файл больше 10 МБ.',
+                            'save' => 'Не удалось сохранить файл на сервере.',
+                        ];
+                        echo htmlspecialchars($photoErrors[$_GET['photo_error']] ?? 'Не удалось загрузить файл.');
+                        ?>
+                    </div>
+                <?php endif; ?>
+
+                <form method="post" action="employee_photo_upload.php" enctype="multipart/form-data" class="row g-2 align-items-end">
+                    <input type="hidden" name="employee_id" value="<?php echo (int) $employee['id']; ?>">
+                    <div class="col-auto">
+                        <input type="file" class="form-control" name="photo" accept=".jpg,.jpeg,.png" required>
+                    </div>
+                    <div class="col-auto">
+                        <button type="submit" class="btn btn-secondary">
+                            <?php echo !empty($employee['photo_stored_name']) ? 'Заменить' : 'Загрузить'; ?>
+                        </button>
+                    </div>
+                </form>
+                <div class="form-hint mt-2">JPG или PNG, до 10 МБ.</div>
+            </div>
+        </div>
+
         <div class="card mt-3">
             <div class="card-header">
                 <h3 class="card-title">Документы сотрудника</h3>

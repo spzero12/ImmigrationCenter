@@ -29,6 +29,7 @@ require __DIR__ . '/includes/header.php';
         <table class="table table-vcenter table-sm card-table" id="employees-table">
             <thead>
                 <tr>
+                    <th></th>
                     <th>ФИО</th>
                     <th>Гражданство</th>
                     <th>Должность</th>
@@ -38,7 +39,7 @@ require __DIR__ . '/includes/header.php';
                 </tr>
             </thead>
             <tbody>
-                <tr><td colspan="6">Загрузка...</td></tr>
+                <tr><td colspan="7">Загрузка...</td></tr>
             </tbody>
         </table>
     </div>

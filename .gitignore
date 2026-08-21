@@ -3,3 +3,5 @@
 /vendor/
 /uploads/documents/*
 !/uploads/documents/.gitkeep
+/uploads/employees/*
+!/uploads/employees/.gitkeep

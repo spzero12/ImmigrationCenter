@@ -17,14 +17,17 @@ $method = $_SERVER['REQUEST_METHOD'];
 if ($method === 'GET') {
     $q = trim($_GET['q'] ?? '');
 
+    // Сортировка по организации в первую очередь — employees.php группирует
+    // строки по ней; сотрудники без организации (NULL/пусто) идут первой
+    // группой, т.к. пустая строка сортируется раньше непустых.
     if ($q !== '') {
         $stmt = $db->prepare(
-            'SELECT * FROM employees WHERE full_name LIKE ? OR citizenship LIKE ? OR position LIKE ? OR department LIKE ? ORDER BY full_name'
+            'SELECT * FROM employees WHERE full_name LIKE ? OR citizenship LIKE ? OR position LIKE ? OR department LIKE ? ORDER BY organization, full_name'
         );
         $like = "%{$q}%";
         $stmt->execute([$like, $like, $like, $like]);
     } else {
-        $stmt = $db->query('SELECT * FROM employees ORDER BY full_name');
+        $stmt = $db->query('SELECT * FROM employees ORDER BY organization, full_name');
     }
 
     echo json_encode($stmt->fetchAll());

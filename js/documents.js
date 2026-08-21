@@ -23,17 +23,27 @@ $(function () {
         $tableBody.empty();
 
         if (documents.length === 0) {
-            $tableBody.append('<tr><td colspan="6">Документы не найдены</td></tr>');
+            $tableBody.append('<tr><td colspan="5">Документы не найдены</td></tr>');
             return;
         }
 
+        let lastEmployeeName = null;
+
         documents.forEach(function (doc) {
+            if (doc.employee_name !== lastEmployeeName) {
+                lastEmployeeName = doc.employee_name;
+                $tableBody.append(
+                    '<tr class="table-group-header"><td colspan="5">' +
+                    '<a href="employee_form.php?id=' + encodeURIComponent(doc.employee_id) + '"><strong>' + escapeHtml(doc.employee_name) + '</strong></a>' +
+                    '</td></tr>'
+                );
+            }
+
             const deleteBtn = CAN_DELETE
                 ? '<button type="button" class="btn btn-danger btn-sm" data-delete="' + doc.id + '">Удалить</button>'
                 : '';
 
             const $row = $('<tr>').html(
-                '<td><a href="employee_form.php?id=' + encodeURIComponent(doc.employee_id) + '">' + escapeHtml(doc.employee_name) + '</a></td>' +
                 '<td>' + escapeHtml(doc.type_label) + '</td>' +
                 '<td>' + escapeHtml(doc.number) + '</td>' +
                 '<td>' + escapeHtml(doc.expire_date || '—') + '</td>' +

@@ -83,19 +83,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         ? null
         : ((int) ($_POST['passport_document_id'] ?? 0) ?: null);
 
-    $passportForDefaults = $document['type'] === 'passport'
-        ? null
-        : getLinkedPassport($db, $document['passport_document_id']);
-    $commonDefaults = documentCommonFieldDefaults($employee, $passportForDefaults);
-
-    $submittedCommon = [];
-    foreach (DOCUMENT_COMMON_FIELDS as $field) {
-        $submittedCommon[$field] = trim($_POST['common_' . $field] ?? '');
-    }
-
-    $overrides = documentBuildOverrides($submittedCommon, $commonDefaults);
-    $overridesJson = $overrides ? json_encode($overrides, JSON_UNESCAPED_UNICODE) : null;
-
     if (!array_key_exists($document['type'], DOCUMENT_TYPE_LABELS)) {
         $error = 'Выберите тип документа';
     } elseif ($document['type'] !== 'passport' && empty($employeePassports)) {
@@ -107,22 +94,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         if ($isEdit) {
             $stmt = $db->prepare(
-                'UPDATE employee_documents SET type = ?, passport_document_id = ?, number = ?, series = ?, issue_date = ?, expire_date = ?, issued_by = ?, notes = ?, field_overrides = ? WHERE id = ?'
+                'UPDATE employee_documents SET type = ?, passport_document_id = ?, number = ?, series = ?, issue_date = ?, expire_date = ?, issued_by = ?, notes = ? WHERE id = ?'
             );
             $stmt->execute([
                 $document['type'], $document['passport_document_id'], $document['number'], $document['series'],
                 $document['issue_date'], $document['expire_date'], $document['issued_by'],
-                $document['notes'], $overridesJson, $document['id'],
+                $document['notes'], $document['id'],
             ]);
             logAudit('update', 'employee_document', (int) $document['id'], $label);
         } else {
             $stmt = $db->prepare(
-                'INSERT INTO employee_documents (employee_id, type, passport_document_id, number, series, issue_date, expire_date, issued_by, notes, field_overrides, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+                'INSERT INTO employee_documents (employee_id, type, passport_document_id, number, series, issue_date, expire_date, issued_by, notes, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
             );
             $stmt->execute([
                 $document['employee_id'], $document['type'], $document['passport_document_id'], $document['number'], $document['series'],
                 $document['issue_date'], $document['expire_date'], $document['issued_by'],
-                $document['notes'], $overridesJson, currentUser()['id'],
+                $document['notes'], currentUser()['id'],
             ]);
             logAudit('create', 'employee_document', (int) $db->lastInsertId(), $label);
         }
@@ -131,9 +118,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         exit;
     }
 }
-
-$passport = $document['type'] === 'passport' ? null : getLinkedPassport($db, $document['passport_document_id']);
-$commonFields = documentEffectiveCommonFields($employee, $passport, $document['field_overrides']);
 
 $pageTitle = $isEdit ? 'Редактирование документа' : 'Новый документ';
 require __DIR__ . '/includes/header.php';
@@ -214,73 +198,6 @@ require __DIR__ . '/includes/header.php';
                     <div class="mb-3">
                         <label class="form-label">Примечания</label>
                         <textarea class="form-control" name="notes" rows="3"><?php echo htmlspecialchars($document['notes'] ?? ''); ?></textarea>
-                    </div>
-
-                    <hr class="my-4">
-
-                    <h3 class="card-title">Общие данные сотрудника для этого документа</h3>
-                    <p class="text-secondary">
-                        Предзаполнено из карточки сотрудника и выбранного выше паспорта.
-                        Можно изменить только для этого документа (например, другая
-                        транслитерация в конкретной визе) — правки карточки
-                        сотрудника сюда сами по себе не влияют, если поле здесь
-                        уже отличается от неё.
-                    </p>
-                    <div class="row">
-                        <div class="col-md-4 mb-3">
-                            <label class="form-label">Фамилия</label>
-                            <input type="text" class="form-control" name="common_last_name" value="<?php echo htmlspecialchars($commonFields['last_name']); ?>">
-                        </div>
-                        <div class="col-md-4 mb-3">
-                            <label class="form-label">Имя</label>
-                            <input type="text" class="form-control" name="common_first_name" value="<?php echo htmlspecialchars($commonFields['first_name']); ?>">
-                        </div>
-                        <div class="col-md-4 mb-3">
-                            <label class="form-label">Отчество</label>
-                            <input type="text" class="form-control" name="common_middle_name" value="<?php echo htmlspecialchars($commonFields['middle_name']); ?>">
-                        </div>
-                    </div>
-                    <div class="row">
-                        <div class="col-md-6 mb-3">
-                            <label class="form-label">Гражданство</label>
-                            <input type="text" class="form-control" name="common_citizenship" value="<?php echo htmlspecialchars($commonFields['citizenship']); ?>">
-                        </div>
-                        <div class="col-md-6 mb-3">
-                            <label class="form-label">Дата рождения</label>
-                            <input type="date" class="form-control" name="common_birth_date" value="<?php echo htmlspecialchars($commonFields['birth_date']); ?>">
-                        </div>
-                    </div>
-                    <div class="row">
-                        <div class="col-md-4 mb-3">
-                            <label class="form-label">Организация</label>
-                            <input type="text" class="form-control" name="common_organization" value="<?php echo htmlspecialchars($commonFields['organization']); ?>">
-                        </div>
-                        <div class="col-md-4 mb-3">
-                            <label class="form-label">Должность</label>
-                            <input type="text" class="form-control" name="common_position" value="<?php echo htmlspecialchars($commonFields['position']); ?>">
-                        </div>
-                        <div class="col-md-4 mb-3">
-                            <label class="form-label">Подразделение</label>
-                            <input type="text" class="form-control" name="common_department" value="<?php echo htmlspecialchars($commonFields['department']); ?>">
-                        </div>
-                    </div>
-                    <div class="row">
-                        <div class="col-md-3 mb-3">
-                            <label class="form-label">Номер паспорта</label>
-                            <input type="text" class="form-control" name="common_passport_number" value="<?php echo htmlspecialchars($commonFields['passport_number']); ?>">
-                        </div>
-                        <div class="col-md-3 mb-3">
-                            <label class="form-label">Серия паспорта</label>
-                            <input type="text" class="form-control" name="common_passport_series" value="<?php echo htmlspecialchars($commonFields['passport_series']); ?>">
-                        </div>
-                        <div class="col-md-3 mb-3">
-                            <label class="form-label">Кем выдан паспорт</label>
-                            <input type="text" class="form-control" name="common_passport_issued_by" value="<?php echo htmlspecialchars($commonFields['passport_issued_by']); ?>">
-                        </div>
-                        <div class="col-md-3 mb-3">
-                            <label class="form-label">Дата выдачи паспорта</label>
-                            <input type="date" class="form-control" name="common_passport_issue_date" value="<?php echo htmlspecialchars($commonFields['passport_issue_date']); ?>">
-                        </div>
                     </div>
 
                     <div class="form-footer">

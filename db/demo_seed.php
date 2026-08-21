@@ -6,8 +6,11 @@
 //
 // Добавляет: 3 демо-пользователей (hr/lawyer/manager) и 6 сотрудников
 // с паспортами и разрешительными документами разных статусов (просрочен /
-// скоро истекает / в порядке / без срока), в разных организациях —
-// чтобы сразу было видно группировку, фильтры и отчёты в работе.
+// скоро истекает / в порядке / без срока), в разных организациях/
+// подразделениях (заводятся автоматически через findOrCreate*) — чтобы
+// сразу было видно группировку, фильтры и отчёты в работе. У каждого
+// документа заполнены и уникальные для его типа поля (extra_fields) —
+// см. DOCUMENT_TYPE_EXTRA_FIELDS в includes/documents.php.
 
 require __DIR__ . '/../includes/db.php';
 
@@ -98,13 +101,16 @@ function insertEmployee(PDO $db, array $data, ?int $createdBy): int
 
 function insertDocument(PDO $db, int $employeeId, ?int $passportDocumentId, array $data, ?int $createdBy): int
 {
+    $extraFieldsJson = !empty($data['extra']) ? json_encode($data['extra'], JSON_UNESCAPED_UNICODE) : null;
+
     $stmt = $db->prepare(
-        'INSERT INTO employee_documents (employee_id, passport_document_id, type, number, series, issue_date, expire_date, issued_by, created_by)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
+        'INSERT INTO employee_documents (employee_id, passport_document_id, type, number, series, issue_date, expire_date, issued_by, extra_fields, created_by)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
     );
     $stmt->execute([
         $employeeId, $passportDocumentId, $data['type'], $data['number'], $data['series'] ?? null,
-        $data['issue_date'] ?? null, $data['expire_date'] ?? null, $data['issued_by'] ?? null, $createdBy,
+        $data['issue_date'] ?? null, $data['expire_date'] ?? null, $data['issued_by'] ?? null,
+        $extraFieldsJson, $createdBy,
     ]);
 
     return (int) $db->lastInsertId();
@@ -120,10 +126,10 @@ $employees = [
             'organization' => 'ООО «Ромашка»', 'department' => 'Логистика', 'position' => 'Кладовщик',
             'phone' => '+7 900 111-22-33',
         ],
-        'passport' => ['number' => 'AA1234567', 'series' => 'AA', 'issue_date' => '2021-05-10', 'expire_date' => '2031-05-10', 'issued_by' => 'МВД Узбекистана'],
+        'passport' => ['number' => 'AA1234567', 'series' => 'AA', 'issue_date' => '2021-05-10', 'expire_date' => '2031-05-10', 'issued_by' => 'МВД Узбекистана', 'extra' => ['birth_place' => 'г. Ташкент']],
         'documents' => [
-            ['type' => 'work_patent', 'number' => 'ПТ-778899', 'issue_date' => '2025-08-20', 'expire_date' => '2026-09-10', 'issued_by' => 'ГУ МВД по г. Москве'],
-            ['type' => 'registration', 'number' => 'РЕГ-001122', 'issue_date' => '2026-01-15', 'expire_date' => '2026-07-15', 'issued_by' => 'ОВМ УМВД'],
+            ['type' => 'work_patent', 'number' => 'ПТ-778899', 'issue_date' => '2025-08-20', 'expire_date' => '2026-09-10', 'issued_by' => 'ГУ МВД по г. Москве', 'extra' => ['profession' => 'Кладовщик', 'region' => 'г. Москва']],
+            ['type' => 'registration', 'number' => 'РЕГ-001122', 'issue_date' => '2026-01-15', 'expire_date' => '2026-07-15', 'issued_by' => 'ОВМ УМВД', 'extra' => ['address' => 'г. Москва, ул. Складская, д. 5', 'registering_party' => 'ООО «Ромашка»']],
         ],
     ],
     [
@@ -133,9 +139,9 @@ $employees = [
             'organization' => 'ООО «Ромашка»', 'department' => 'Логистика', 'position' => 'Водитель',
             'phone' => '+7 900 222-33-44',
         ],
-        'passport' => ['number' => 'BB2233445', 'series' => 'BB', 'issue_date' => '2019-11-20', 'expire_date' => '2029-11-20', 'issued_by' => 'МВД Таджикистана'],
+        'passport' => ['number' => 'BB2233445', 'series' => 'BB', 'issue_date' => '2019-11-20', 'expire_date' => '2029-11-20', 'issued_by' => 'МВД Таджикистана', 'extra' => ['birth_place' => 'г. Душанбе']],
         'documents' => [
-            ['type' => 'work_patent', 'number' => 'ПТ-556677', 'issue_date' => '2025-12-01', 'expire_date' => '2026-12-01', 'issued_by' => 'ГУ МВД по г. Москве'],
+            ['type' => 'work_patent', 'number' => 'ПТ-556677', 'issue_date' => '2025-12-01', 'expire_date' => '2026-12-01', 'issued_by' => 'ГУ МВД по г. Москве', 'extra' => ['profession' => 'Водитель', 'region' => 'г. Москва']],
         ],
     ],
     [
@@ -145,9 +151,9 @@ $employees = [
             'organization' => 'АО «СтройГрад»', 'department' => 'Строительство', 'position' => 'Разнорабочая',
             'phone' => '+7 900 333-44-55',
         ],
-        'passport' => ['number' => 'CC3344556', 'series' => 'CC', 'issue_date' => '2022-02-14', 'expire_date' => '2032-02-14', 'issued_by' => 'МВД Киргизии'],
+        'passport' => ['number' => 'CC3344556', 'series' => 'CC', 'issue_date' => '2022-02-14', 'expire_date' => '2032-02-14', 'issued_by' => 'МВД Киргизии', 'extra' => ['birth_place' => 'г. Бишкек']],
         'documents' => [
-            ['type' => 'registration', 'number' => 'РЕГ-334455', 'issue_date' => '2026-02-01', 'expire_date' => '2026-08-30', 'issued_by' => 'ОВМ УМВД'],
+            ['type' => 'registration', 'number' => 'РЕГ-334455', 'issue_date' => '2026-02-01', 'expire_date' => '2026-08-30', 'issued_by' => 'ОВМ УМВД', 'extra' => ['address' => 'г. Москва, ул. Строителей, д. 12', 'registering_party' => 'АО «СтройГрад»']],
         ],
     ],
     [
@@ -157,9 +163,9 @@ $employees = [
             'organization' => 'АО «СтройГрад»', 'department' => 'Строительство', 'position' => 'Бригадир',
             'phone' => '+7 900 444-55-66',
         ],
-        'passport' => ['number' => 'DD4455667', 'series' => 'DD', 'issue_date' => '2018-07-01', 'expire_date' => '2026-07-01', 'issued_by' => 'МВД Узбекистана'],
+        'passport' => ['number' => 'DD4455667', 'series' => 'DD', 'issue_date' => '2018-07-01', 'expire_date' => '2026-07-01', 'issued_by' => 'МВД Узбекистана', 'extra' => ['birth_place' => 'г. Самарканд']],
         'documents' => [
-            ['type' => 'work_permit', 'number' => 'РАЗР-998877', 'issue_date' => '2023-01-10', 'expire_date' => '2026-01-10', 'issued_by' => 'ГУ МВД по г. Москве'],
+            ['type' => 'work_permit', 'number' => 'РАЗР-998877', 'issue_date' => '2023-01-10', 'expire_date' => '2026-01-10', 'issued_by' => 'ГУ МВД по г. Москве', 'extra' => ['profession' => 'Бригадир', 'employer_name' => 'АО «СтройГрад»']],
         ],
     ],
     [
@@ -169,10 +175,10 @@ $employees = [
             'organization' => 'ИП Смирнов А.В.', 'department' => 'Клининг', 'position' => 'Уборщица',
             'phone' => '+7 900 555-66-77',
         ],
-        'passport' => ['number' => 'EE5566778', 'series' => 'EE', 'issue_date' => '2023-09-05', 'expire_date' => '2033-09-05', 'issued_by' => 'МВД Таджикистана'],
+        'passport' => ['number' => 'EE5566778', 'series' => 'EE', 'issue_date' => '2023-09-05', 'expire_date' => '2033-09-05', 'issued_by' => 'МВД Таджикистана', 'extra' => ['birth_place' => 'г. Худжанд']],
         'documents' => [
-            ['type' => 'work_patent', 'number' => 'ПТ-112233', 'issue_date' => '2026-08-01', 'expire_date' => '2026-09-01', 'issued_by' => 'ГУ МВД по г. Москве'],
-            ['type' => 'registration', 'number' => 'РЕГ-667788', 'issue_date' => '2026-06-01', 'expire_date' => '2027-06-01', 'issued_by' => 'ОВМ УМВД'],
+            ['type' => 'work_patent', 'number' => 'ПТ-112233', 'issue_date' => '2026-08-01', 'expire_date' => '2026-09-01', 'issued_by' => 'ГУ МВД по г. Москве', 'extra' => ['profession' => 'Уборщица', 'region' => 'г. Москва']],
+            ['type' => 'registration', 'number' => 'РЕГ-667788', 'issue_date' => '2026-06-01', 'expire_date' => '2027-06-01', 'issued_by' => 'ОВМ УМВД', 'extra' => ['address' => 'г. Москва, ул. Клининговая, д. 3', 'registering_party' => 'ИП Смирнов А.В.']],
         ],
     ],
     [
@@ -183,9 +189,9 @@ $employees = [
             'phone' => '+7 900 666-77-88',
             'notes' => 'Организация ещё не назначена — демонстрация группы «Без организации».',
         ],
-        'passport' => ['number' => 'FF6677889', 'series' => 'FF', 'issue_date' => '2024-04-04', 'expire_date' => '2034-04-04', 'issued_by' => 'МВД Киргизии'],
+        'passport' => ['number' => 'FF6677889', 'series' => 'FF', 'issue_date' => '2024-04-04', 'expire_date' => '2034-04-04', 'issued_by' => 'МВД Киргизии', 'extra' => ['birth_place' => 'г. Ош']],
         'documents' => [
-            ['type' => 'visa', 'number' => 'ВИЗА-001', 'issue_date' => '2026-01-01', 'expire_date' => null, 'issued_by' => 'Посольство РФ'],
+            ['type' => 'visa', 'number' => 'ВИЗА-001', 'issue_date' => '2026-01-01', 'expire_date' => null, 'issued_by' => 'Посольство РФ', 'extra' => ['visa_category' => 'Рабочая', 'visa_multiplicity' => 'Многократная']],
         ],
     ],
 ];

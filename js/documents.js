@@ -19,11 +19,21 @@ $(function () {
         $statExpiring.text(expiringSoon);
     }
 
+    function extraFieldsHtml(pairs) {
+        if (!pairs || pairs.length === 0) {
+            return '<span class="text-secondary">—</span>';
+        }
+
+        return '<div class="extra-field-pairs">' + pairs.map(function (pair) {
+            return '<div class="extra-field-pair"><span class="extra-field-label">' + escapeHtml(pair.label) + ':</span> ' + escapeHtml(pair.value) + '</div>';
+        }).join('') + '</div>';
+    }
+
     function renderRows(documents) {
         $tableBody.empty();
 
         if (documents.length === 0) {
-            $tableBody.append('<tr><td colspan="5">Документы не найдены</td></tr>');
+            $tableBody.append('<tr><td colspan="6">Документы не найдены</td></tr>');
             return;
         }
 
@@ -33,7 +43,7 @@ $(function () {
             if (doc.employee_name !== lastEmployeeName) {
                 lastEmployeeName = doc.employee_name;
                 $tableBody.append(
-                    '<tr class="table-group-header"><td colspan="5">' +
+                    '<tr class="table-group-header"><td colspan="6">' +
                     '<a href="employee_form.php?id=' + encodeURIComponent(doc.employee_id) + '"><strong>' + escapeHtml(doc.employee_name) + '</strong></a>' +
                     '</td></tr>'
                 );
@@ -46,6 +56,7 @@ $(function () {
             const $row = $('<tr>').html(
                 '<td>' + escapeHtml(doc.type_label) + '</td>' +
                 '<td>' + escapeHtml(doc.number) + '</td>' +
+                '<td>' + extraFieldsHtml(doc.extra_fields_display) + '</td>' +
                 '<td>' + escapeHtml(doc.expire_date || '—') + '</td>' +
                 '<td><span class="badge ' + doc.status.badgeClass + '">' + escapeHtml(doc.status.label) + '</span></td>' +
                 '<td class="text-end">' +

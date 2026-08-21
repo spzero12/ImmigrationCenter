@@ -17,6 +17,7 @@ $document = [
     'issued_by' => '',
     'notes' => '',
     'field_overrides' => null,
+    'extra_fields' => null,
     'scan_original_name' => null,
     'scan_mime_type' => null,
 ];
@@ -83,6 +84,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         ? null
         : ((int) ($_POST['passport_document_id'] ?? 0) ?: null);
 
+    $extraValues = [];
+    foreach (DOCUMENT_TYPE_EXTRA_FIELDS[$document['type']] ?? [] as $key => $label) {
+        $value = trim($_POST['extra_' . $key] ?? '');
+
+        if ($value !== '') {
+            $extraValues[$key] = $value;
+        }
+    }
+    $extraFieldsJson = $extraValues ? json_encode($extraValues, JSON_UNESCAPED_UNICODE) : null;
+
     if (!array_key_exists($document['type'], DOCUMENT_TYPE_LABELS)) {
         $error = 'Выберите тип документа';
     } elseif ($document['type'] !== 'passport' && empty($employeePassports)) {
@@ -94,22 +105,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         if ($isEdit) {
             $stmt = $db->prepare(
-                'UPDATE employee_documents SET type = ?, passport_document_id = ?, number = ?, series = ?, issue_date = ?, expire_date = ?, issued_by = ?, notes = ? WHERE id = ?'
+                'UPDATE employee_documents SET type = ?, passport_document_id = ?, number = ?, series = ?, issue_date = ?, expire_date = ?, issued_by = ?, notes = ?, extra_fields = ? WHERE id = ?'
             );
             $stmt->execute([
                 $document['type'], $document['passport_document_id'], $document['number'], $document['series'],
                 $document['issue_date'], $document['expire_date'], $document['issued_by'],
-                $document['notes'], $document['id'],
+                $document['notes'], $extraFieldsJson, $document['id'],
             ]);
             logAudit('update', 'employee_document', (int) $document['id'], $label);
         } else {
             $stmt = $db->prepare(
-                'INSERT INTO employee_documents (employee_id, type, passport_document_id, number, series, issue_date, expire_date, issued_by, notes, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+                'INSERT INTO employee_documents (employee_id, type, passport_document_id, number, series, issue_date, expire_date, issued_by, notes, extra_fields, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
             );
             $stmt->execute([
                 $document['employee_id'], $document['type'], $document['passport_document_id'], $document['number'], $document['series'],
                 $document['issue_date'], $document['expire_date'], $document['issued_by'],
-                $document['notes'], currentUser()['id'],
+                $document['notes'], $extraFieldsJson, currentUser()['id'],
             ]);
             logAudit('create', 'employee_document', (int) $db->lastInsertId(), $label);
         }
@@ -195,6 +206,19 @@ require __DIR__ . '/includes/header.php';
                         <label class="form-label">Кем выдан</label>
                         <input type="text" class="form-control" name="issued_by" value="<?php echo htmlspecialchars($document['issued_by'] ?? ''); ?>">
                     </div>
+
+                    <?php $existingExtraValues = json_decode($document['extra_fields'] ?? '', true) ?: []; ?>
+                    <?php foreach (DOCUMENT_TYPE_EXTRA_FIELDS as $extraType => $extraFields): ?>
+                        <div class="extra-fields-group row" data-extra-type="<?php echo htmlspecialchars($extraType); ?>" style="<?php echo $document['type'] === $extraType ? '' : 'display:none'; ?>">
+                            <?php foreach ($extraFields as $key => $label): ?>
+                                <div class="col-md-6 mb-3">
+                                    <label class="form-label"><?php echo htmlspecialchars($label); ?></label>
+                                    <input type="text" class="form-control" name="extra_<?php echo htmlspecialchars($key); ?>" value="<?php echo htmlspecialchars($existingExtraValues[$key] ?? ''); ?>">
+                                </div>
+                            <?php endforeach; ?>
+                        </div>
+                    <?php endforeach; ?>
+
                     <div class="mb-3">
                         <label class="form-label">Примечания</label>
                         <textarea class="form-control" name="notes" rows="3"><?php echo htmlspecialchars($document['notes'] ?? ''); ?></textarea>
@@ -272,7 +296,11 @@ require __DIR__ . '/includes/header.php';
 <script>
     $(function () {
         $('#document-type').on('change', function () {
-            $('#passport-select-wrapper').toggle($(this).val() !== 'passport');
+            const type = $(this).val();
+            $('#passport-select-wrapper').toggle(type !== 'passport');
+            $('.extra-fields-group').each(function () {
+                $(this).toggle($(this).data('extra-type') === type);
+            });
         });
     });
 </script>

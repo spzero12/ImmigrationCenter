@@ -292,6 +292,7 @@ require __DIR__ . '/includes/header.php';
                             <th>Тип</th>
                             <th>Номер</th>
                             <th>Паспорт</th>
+                            <th>Детали</th>
                             <th>Срок действия</th>
                             <th>Статус</th>
                             <th></th>
@@ -299,8 +300,8 @@ require __DIR__ . '/includes/header.php';
                     </thead>
                     <tbody>
                         <?php if (empty($employeeDocuments)): ?>
-                            <tr><td colspan="6">Документов пока нет</td></tr>
-                        <?php else: foreach ($employeeDocuments as $doc): $status = documentStatus($doc['expire_date']); ?>
+                            <tr><td colspan="7">Документов пока нет</td></tr>
+                        <?php else: foreach ($employeeDocuments as $doc): $status = documentStatus($doc['expire_date']); $extraPairs = documentExtraFieldPairs($doc['type'], $doc['extra_fields']); ?>
                             <tr>
                                 <td><?php echo htmlspecialchars(DOCUMENT_TYPE_LABELS[$doc['type']] ?? $doc['type']); ?></td>
                                 <td><?php echo htmlspecialchars($doc['number'] ?? ''); ?></td>
@@ -311,6 +312,17 @@ require __DIR__ . '/includes/header.php';
                                         №<?php echo htmlspecialchars($passportNumbersById[$doc['passport_document_id']] ?: '—'); ?>
                                     <?php else: ?>
                                         <span class="text-danger">не привязан</span>
+                                    <?php endif; ?>
+                                </td>
+                                <td>
+                                    <?php if (empty($extraPairs)): ?>
+                                        <span class="text-secondary">—</span>
+                                    <?php else: ?>
+                                        <div class="extra-field-pairs">
+                                            <?php foreach ($extraPairs as $pair): ?>
+                                                <div class="extra-field-pair"><span class="extra-field-label"><?php echo htmlspecialchars($pair['label']); ?>:</span> <?php echo htmlspecialchars($pair['value']); ?></div>
+                                            <?php endforeach; ?>
+                                        </div>
                                     <?php endif; ?>
                                 </td>
                                 <td><?php echo htmlspecialchars($doc['expire_date'] ?? '—'); ?></td>

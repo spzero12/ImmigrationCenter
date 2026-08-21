@@ -12,6 +12,54 @@ const DOCUMENT_TYPE_LABELS = [
     'registration' => 'Регистрация по месту пребывания',
 ];
 
+// Фича "Уникальные поля по типу документа" — свои поля под каждый тип,
+// сверх общих (номер/серия/даты/кем выдан). Хранятся в
+// employee_documents.extra_fields (JSON), ключ => человекочитаемая метка.
+const DOCUMENT_TYPE_EXTRA_FIELDS = [
+    'passport' => [
+        'birth_place' => 'Место рождения',
+    ],
+    'visa' => [
+        'visa_category' => 'Категория визы',
+        'visa_multiplicity' => 'Кратность',
+    ],
+    'work_patent' => [
+        'profession' => 'Профессия',
+        'region' => 'Регион действия',
+    ],
+    'work_permit' => [
+        'profession' => 'Профессия',
+        'employer_name' => 'Работодатель',
+    ],
+    'registration' => [
+        'address' => 'Адрес регистрации',
+        'registering_party' => 'Принимающая сторона',
+    ],
+];
+
+// Возвращает только заполненные пары [key, label, value] для конкретного
+// документа — используется и в document_form.php (предзаполнение), и в
+// documents.php/employee_form.php (компактный вывод в таблице).
+function documentExtraFieldPairs(string $type, ?string $extraFieldsJson): array
+{
+    $labels = DOCUMENT_TYPE_EXTRA_FIELDS[$type] ?? [];
+
+    if (empty($labels) || !$extraFieldsJson) {
+        return [];
+    }
+
+    $values = json_decode($extraFieldsJson, true) ?: [];
+    $pairs = [];
+
+    foreach ($labels as $key => $label) {
+        if (!empty($values[$key])) {
+            $pairs[] = ['key' => $key, 'label' => $label, 'value' => $values[$key]];
+        }
+    }
+
+    return $pairs;
+}
+
 function documentStatus(?string $expireDate, ?string $referenceDate = null): array
 {
     if (!$expireDate) {

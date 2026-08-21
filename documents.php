@@ -53,13 +53,14 @@ require __DIR__ . '/includes/header.php';
                 <tr>
                     <th>Тип документа</th>
                     <th>Номер</th>
+                    <th>Детали</th>
                     <th>Срок действия</th>
                     <th>Статус</th>
                     <th></th>
                 </tr>
             </thead>
             <tbody>
-                <tr><td colspan="5">Загрузка...</td></tr>
+                <tr><td colspan="6">Загрузка...</td></tr>
             </tbody>
         </table>
     </div>

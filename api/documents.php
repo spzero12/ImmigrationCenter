@@ -46,6 +46,7 @@ if ($method === 'GET') {
     $documents = array_map(static function (array $row): array {
         $row['type_label'] = DOCUMENT_TYPE_LABELS[$row['type']] ?? $row['type'];
         $row['status'] = documentStatus($row['expire_date']);
+        $row['extra_fields_display'] = documentExtraFieldPairs($row['type'], $row['extra_fields']);
 
         return $row;
     }, $stmt->fetchAll());

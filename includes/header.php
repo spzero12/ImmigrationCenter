@@ -30,6 +30,12 @@
                         </a>
                     </li>
                     <li class="nav-item">
+                        <a class="nav-link" href="organizations.php">
+                            <span class="nav-link-icon"><i class="ti ti-building"></i></span>
+                            <span class="nav-link-title">Организации</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
                         <a class="nav-link" href="documents.php">
                             <span class="nav-link-icon"><i class="ti ti-file-text"></i></span>
                             <span class="nav-link-title">Документы</span>

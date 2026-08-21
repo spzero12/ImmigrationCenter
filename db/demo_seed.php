@@ -38,17 +38,58 @@ foreach ($demoUsers as [$username, $fullName, $role]) {
 $adminStmt = $db->query("SELECT id FROM users WHERE role = 'admin' ORDER BY id LIMIT 1");
 $adminId = $adminStmt->fetchColumn() ?: null;
 
+function findOrCreateOrganization(PDO $db, ?string $name): ?int
+{
+    if (!$name) {
+        return null;
+    }
+
+    $stmt = $db->prepare('SELECT id FROM organizations WHERE name = ?');
+    $stmt->execute([$name]);
+    $id = $stmt->fetchColumn();
+
+    if ($id) {
+        return (int) $id;
+    }
+
+    $db->prepare('INSERT INTO organizations (name) VALUES (?)')->execute([$name]);
+
+    return (int) $db->lastInsertId();
+}
+
+function findOrCreateDepartment(PDO $db, ?int $organizationId, ?string $name): ?int
+{
+    if (!$organizationId || !$name) {
+        return null;
+    }
+
+    $stmt = $db->prepare('SELECT id FROM departments WHERE organization_id = ? AND name = ?');
+    $stmt->execute([$organizationId, $name]);
+    $id = $stmt->fetchColumn();
+
+    if ($id) {
+        return (int) $id;
+    }
+
+    $db->prepare('INSERT INTO departments (organization_id, name) VALUES (?, ?)')->execute([$organizationId, $name]);
+
+    return (int) $db->lastInsertId();
+}
+
 function insertEmployee(PDO $db, array $data, ?int $createdBy): int
 {
+    $organizationId = findOrCreateOrganization($db, $data['organization'] ?? null);
+    $departmentId = findOrCreateDepartment($db, $organizationId, $data['department'] ?? null);
+
     $stmt = $db->prepare(
-        'INSERT INTO employees (full_name, last_name, first_name, middle_name, citizenship, birth_date, organization, position, department, phone, email, notes, created_by)
+        'INSERT INTO employees (full_name, last_name, first_name, middle_name, citizenship, birth_date, organization_id, position, department_id, phone, email, notes, created_by)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
     );
     $fullName = trim($data['last_name'] . ' ' . $data['first_name'] . ' ' . ($data['middle_name'] ?? ''));
     $stmt->execute([
         $fullName, $data['last_name'], $data['first_name'], $data['middle_name'] ?? null,
-        $data['citizenship'], $data['birth_date'], $data['organization'] ?? null,
-        $data['position'], $data['department'], $data['phone'] ?? null, $data['email'] ?? null,
+        $data['citizenship'], $data['birth_date'], $organizationId,
+        $data['position'], $departmentId, $data['phone'] ?? null, $data['email'] ?? null,
         $data['notes'] ?? null, $createdBy,
     ]);
 

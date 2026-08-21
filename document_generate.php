@@ -29,7 +29,13 @@ if (!$document) {
     exit('Документ не найден');
 }
 
-$employeeStmt = $db->prepare('SELECT * FROM employees WHERE id = ?');
+$employeeStmt = $db->prepare(
+    'SELECT e.*, o.name AS organization, d.name AS department
+     FROM employees e
+     LEFT JOIN organizations o ON o.id = e.organization_id
+     LEFT JOIN departments d ON d.id = e.department_id
+     WHERE e.id = ?'
+);
 $employeeStmt->execute([$document['employee_id']]);
 $employee = $employeeStmt->fetch();
 

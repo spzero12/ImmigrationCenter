@@ -7,16 +7,25 @@ requireLogin();
 $db = getDb();
 
 // 1. Сводка по сотрудникам.
-$employees = $db->query('SELECT id, full_name, citizenship, department FROM employees ORDER BY full_name')->fetchAll();
+$employees = $db->query(
+    'SELECT e.id, e.full_name, e.citizenship, o.name AS organization, d.name AS department
+     FROM employees e
+     LEFT JOIN organizations o ON o.id = e.organization_id
+     LEFT JOIN departments d ON d.id = e.department_id
+     ORDER BY e.full_name'
+)->fetchAll();
 $totalEmployees = count($employees);
 
 $byCitizenship = [];
+$byOrganization = [];
 $byDepartment = [];
 
 foreach ($employees as $employee) {
     $citizenship = $employee['citizenship'] ?: '—';
+    $organization = $employee['organization'] ?: '—';
     $department = $employee['department'] ?: '—';
     $byCitizenship[$citizenship] = ($byCitizenship[$citizenship] ?? 0) + 1;
+    $byOrganization[$organization] = ($byOrganization[$organization] ?? 0) + 1;
     $byDepartment[$department] = ($byDepartment[$department] ?? 0) + 1;
 }
 
@@ -76,17 +85,23 @@ require __DIR__ . '/includes/header.php';
     </div>
     <div class="card-body">
         <div class="row mb-3">
-            <div class="col-md-4">
+            <div class="col-md-3">
                 <div class="subheader">Всего сотрудников</div>
                 <div class="h1"><?php echo $totalEmployees; ?></div>
             </div>
-            <div class="col-md-4">
+            <div class="col-md-3">
+                <div class="subheader">По организациям</div>
+                <?php foreach ($byOrganization as $label => $count): ?>
+                    <div><?php echo htmlspecialchars($label); ?>: <strong><?php echo $count; ?></strong></div>
+                <?php endforeach; ?>
+            </div>
+            <div class="col-md-3">
                 <div class="subheader">По гражданству</div>
                 <?php foreach ($byCitizenship as $label => $count): ?>
                     <div><?php echo htmlspecialchars($label); ?>: <strong><?php echo $count; ?></strong></div>
                 <?php endforeach; ?>
             </div>
-            <div class="col-md-4">
+            <div class="col-md-3">
                 <div class="subheader">По подразделениям</div>
                 <?php foreach ($byDepartment as $label => $count): ?>
                     <div><?php echo htmlspecialchars($label); ?>: <strong><?php echo $count; ?></strong></div>
@@ -99,6 +114,7 @@ require __DIR__ . '/includes/header.php';
             <thead>
                 <tr>
                     <th>ФИО</th>
+                    <th>Организация</th>
                     <th>Гражданство</th>
                     <th>Подразделение</th>
                     <th>Документов</th>
@@ -107,10 +123,11 @@ require __DIR__ . '/includes/header.php';
             </thead>
             <tbody>
                 <?php if (empty($employees)): ?>
-                    <tr><td colspan="5">Сотрудников нет</td></tr>
+                    <tr><td colspan="6">Сотрудников нет</td></tr>
                 <?php else: foreach ($employees as $employee): $status = documentStatus($nearestExpireByEmployee[$employee['id']] ?? null); ?>
                     <tr>
                         <td><a href="employee_form.php?id=<?php echo (int) $employee['id']; ?>"><?php echo htmlspecialchars($employee['full_name']); ?></a></td>
+                        <td><?php echo htmlspecialchars($employee['organization'] ?? ''); ?></td>
                         <td><?php echo htmlspecialchars($employee['citizenship'] ?? ''); ?></td>
                         <td><?php echo htmlspecialchars($employee['department'] ?? ''); ?></td>
                         <td><?php echo $docCounts[$employee['id']] ?? 0; ?></td>

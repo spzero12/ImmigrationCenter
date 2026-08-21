@@ -15,7 +15,13 @@ require_once $vendorAutoload;
 
 $db = getDb();
 
-$employees = $db->query('SELECT id, full_name, citizenship, department FROM employees ORDER BY full_name')->fetchAll();
+$employees = $db->query(
+    'SELECT e.id, e.full_name, e.citizenship, o.name AS organization, d.name AS department
+     FROM employees e
+     LEFT JOIN organizations o ON o.id = e.organization_id
+     LEFT JOIN departments d ON d.id = e.department_id
+     ORDER BY e.full_name'
+)->fetchAll();
 
 $docCounts = [];
 $nearestExpireByEmployee = [];
@@ -32,9 +38,9 @@ $spreadsheet = new \PhpOffice\PhpSpreadsheet\Spreadsheet();
 $sheet = $spreadsheet->getActiveSheet();
 $sheet->setTitle('Сводка по сотрудникам');
 
-$headers = ['ФИО', 'Гражданство', 'Подразделение', 'Документов', 'Ближайший срок', 'Статус'];
+$headers = ['ФИО', 'Организация', 'Гражданство', 'Подразделение', 'Документов', 'Ближайший срок', 'Статус'];
 $sheet->fromArray($headers, null, 'A1');
-$sheet->getStyle('A1:F1')->getFont()->setBold(true);
+$sheet->getStyle('A1:G1')->getFont()->setBold(true);
 
 $rowNumber = 2;
 
@@ -44,6 +50,7 @@ foreach ($employees as $employee) {
 
     $sheet->fromArray([
         $employee['full_name'],
+        $employee['organization'] ?? '',
         $employee['citizenship'] ?? '',
         $employee['department'] ?? '',
         $docCounts[$employee['id']] ?? 0,
@@ -54,7 +61,7 @@ foreach ($employees as $employee) {
     $rowNumber++;
 }
 
-foreach (range('A', 'F') as $column) {
+foreach (range('A', 'G') as $column) {
     $sheet->getColumnDimension($column)->setAutoSize(true);
 }
 

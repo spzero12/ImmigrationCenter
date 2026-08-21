@@ -3,6 +3,7 @@
 require __DIR__ . '/includes/auth.php';
 require_once __DIR__ . '/includes/documents.php';
 require_once __DIR__ . '/includes/audit.php';
+require_once __DIR__ . '/includes/organizations.php';
 requireLogin();
 
 $employee = [
@@ -12,9 +13,9 @@ $employee = [
     'middle_name' => '',
     'citizenship' => '',
     'birth_date' => '',
-    'organization' => '',
+    'organization_id' => null,
     'position' => '',
-    'department' => '',
+    'department_id' => null,
     'phone' => '',
     'email' => '',
     'notes' => '',
@@ -58,9 +59,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $employee['middle_name'] = trim($_POST['middle_name'] ?? '');
     $employee['citizenship'] = trim($_POST['citizenship'] ?? '');
     $employee['birth_date'] = $_POST['birth_date'] ?: null;
-    $employee['organization'] = trim($_POST['organization'] ?? '');
+    $employee['organization_id'] = (int) ($_POST['organization_id'] ?? 0) ?: null;
     $employee['position'] = trim($_POST['position'] ?? '');
-    $employee['department'] = trim($_POST['department'] ?? '');
+    $employee['department_id'] = (int) ($_POST['department_id'] ?? 0) ?: null;
     $employee['phone'] = trim($_POST['phone'] ?? '');
     $employee['email'] = trim($_POST['email'] ?? '');
     $employee['notes'] = trim($_POST['notes'] ?? '');
@@ -71,30 +72,42 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // продолжает читать full_name как раньше.
     $fullName = trim($employee['last_name'] . ' ' . $employee['first_name'] . ' ' . $employee['middle_name']);
 
+    $db = getDb();
+
+    // Подразделение должно принадлежать выбранной организации — на случай
+    // подмены значений в обход выпадающего списка.
+    if ($employee['department_id']) {
+        $deptCheckStmt = $db->prepare('SELECT id FROM departments WHERE id = ? AND organization_id = ?');
+        $deptCheckStmt->execute([$employee['department_id'], $employee['organization_id']]);
+
+        if (!$deptCheckStmt->fetch()) {
+            $employee['department_id'] = null;
+        }
+    }
+
     if ($employee['last_name'] === '' || $employee['first_name'] === '') {
         $error = 'Укажите фамилию и имя сотрудника';
     } else {
-        $db = getDb();
 
         if ($isEdit) {
             $stmt = $db->prepare(
-                'UPDATE employees SET full_name = ?, last_name = ?, first_name = ?, middle_name = ?, citizenship = ?, birth_date = ?, organization = ?, position = ?, department = ?, phone = ?, email = ?, notes = ? WHERE id = ?'
+                'UPDATE employees SET full_name = ?, last_name = ?, first_name = ?, middle_name = ?, citizenship = ?, birth_date = ?, organization_id = ?, position = ?, department_id = ?, phone = ?, email = ?, notes = ? WHERE id = ?'
             );
             $stmt->execute([
                 $fullName, $employee['last_name'], $employee['first_name'], $employee['middle_name'] ?: null,
-                $employee['citizenship'], $employee['birth_date'], $employee['organization'],
-                $employee['position'], $employee['department'], $employee['phone'],
+                $employee['citizenship'], $employee['birth_date'], $employee['organization_id'],
+                $employee['position'], $employee['department_id'], $employee['phone'],
                 $employee['email'], $employee['notes'], $employee['id'],
             ]);
             logAudit('update', 'employee', (int) $employee['id'], $fullName);
         } else {
             $stmt = $db->prepare(
-                'INSERT INTO employees (full_name, last_name, first_name, middle_name, citizenship, birth_date, organization, position, department, phone, email, notes, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+                'INSERT INTO employees (full_name, last_name, first_name, middle_name, citizenship, birth_date, organization_id, position, department_id, phone, email, notes, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
             );
             $stmt->execute([
                 $fullName, $employee['last_name'], $employee['first_name'], $employee['middle_name'] ?: null,
-                $employee['citizenship'], $employee['birth_date'], $employee['organization'],
-                $employee['position'], $employee['department'], $employee['phone'],
+                $employee['citizenship'], $employee['birth_date'], $employee['organization_id'],
+                $employee['position'], $employee['department_id'], $employee['phone'],
                 $employee['email'], $employee['notes'], currentUser()['id'],
             ]);
             logAudit('create', 'employee', (int) $db->lastInsertId(), $fullName);
@@ -104,6 +117,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         exit;
     }
 }
+
+$organizations = getOrganizations(getDb());
+$allDepartments = getDepartments(getDb());
 
 $pageTitle = $isEdit ? 'Редактирование сотрудника' : 'Новый сотрудник';
 require __DIR__ . '/includes/header.php';
@@ -156,7 +172,13 @@ require __DIR__ . '/includes/header.php';
                     <div class="row">
                         <div class="col-md-4 mb-3">
                             <label class="form-label">Организация</label>
-                            <input type="text" class="form-control" name="organization" value="<?php echo htmlspecialchars($employee['organization'] ?? ''); ?>">
+                            <select class="form-select" name="organization_id" id="organization-select">
+                                <option value="">— не указана —</option>
+                                <?php foreach ($organizations as $organization): ?>
+                                    <option value="<?php echo (int) $organization['id']; ?>" <?php echo (int) $employee['organization_id'] === (int) $organization['id'] ? 'selected' : ''; ?>><?php echo htmlspecialchars($organization['name']); ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                            <div class="form-hint">Управление организациями — <a href="organizations.php">отдельная страница</a>.</div>
                         </div>
                         <div class="col-md-4 mb-3">
                             <label class="form-label">Должность</label>
@@ -164,7 +186,9 @@ require __DIR__ . '/includes/header.php';
                         </div>
                         <div class="col-md-4 mb-3">
                             <label class="form-label">Подразделение</label>
-                            <input type="text" class="form-control" name="department" value="<?php echo htmlspecialchars($employee['department'] ?? ''); ?>">
+                            <select class="form-select" name="department_id" id="department-select">
+                                <option value="">— не указано —</option>
+                            </select>
                         </div>
                     </div>
                     <div class="row">
@@ -189,6 +213,33 @@ require __DIR__ . '/includes/header.php';
                 </form>
             </div>
         </div>
+
+        <script>
+            $(function () {
+                const allDepartments = <?php echo json_encode(array_map(static function (array $d): array {
+                    return ['id' => (int) $d['id'], 'organization_id' => (int) $d['organization_id'], 'name' => $d['name']];
+                }, $allDepartments)); ?>;
+                const currentDepartmentId = <?php echo (int) ($employee['department_id'] ?? 0); ?>;
+
+                const $organizationSelect = $('#organization-select');
+                const $departmentSelect = $('#department-select');
+
+                function renderDepartmentOptions() {
+                    const organizationId = parseInt($organizationSelect.val(), 10) || 0;
+                    $departmentSelect.empty().append('<option value="">— не указано —</option>');
+
+                    allDepartments
+                        .filter(function (d) { return d.organization_id === organizationId; })
+                        .forEach(function (d) {
+                            const selected = d.id === currentDepartmentId ? 'selected' : '';
+                            $departmentSelect.append('<option value="' + d.id + '" ' + selected + '>' + $('<div>').text(d.name).html() + '</option>');
+                        });
+                }
+
+                $organizationSelect.on('change', renderDepartmentOptions);
+                renderDepartmentOptions();
+            });
+        </script>
 
         <?php if ($isEdit): ?>
         <div class="card mt-3">

@@ -17,17 +17,26 @@ $method = $_SERVER['REQUEST_METHOD'];
 if ($method === 'GET') {
     $q = trim($_GET['q'] ?? '');
 
+    // organization/department — джойн на справочники, с алиасами под старые
+    // имена полей (весь остальной код, включая js/employees.js, ждёт именно
+    // employee.organization / employee.department как текст).
     // Сортировка по организации в первую очередь — employees.php группирует
-    // строки по ней; сотрудники без организации (NULL/пусто) идут первой
-    // группой, т.к. пустая строка сортируется раньше непустых.
+    // строки по ней; сотрудники без организации идут первой группой
+    // (NULL в MySQL сортируется раньше любого значения).
+    $baseSql = 'SELECT e.*, o.name AS organization, d.name AS department
+                FROM employees e
+                LEFT JOIN organizations o ON o.id = e.organization_id
+                LEFT JOIN departments d ON d.id = e.department_id';
+
     if ($q !== '') {
         $stmt = $db->prepare(
-            'SELECT * FROM employees WHERE full_name LIKE ? OR citizenship LIKE ? OR position LIKE ? OR department LIKE ? ORDER BY organization, full_name'
+            $baseSql . ' WHERE e.full_name LIKE ? OR e.citizenship LIKE ? OR e.position LIKE ? OR d.name LIKE ?
+                          ORDER BY o.name IS NULL, o.name, e.full_name'
         );
         $like = "%{$q}%";
         $stmt->execute([$like, $like, $like, $like]);
     } else {
-        $stmt = $db->query('SELECT * FROM employees ORDER BY organization, full_name');
+        $stmt = $db->query($baseSql . ' ORDER BY o.name IS NULL, o.name, e.full_name');
     }
 
     echo json_encode($stmt->fetchAll());

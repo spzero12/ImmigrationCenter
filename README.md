@@ -14,14 +14,12 @@
 после сессии верните файл командой `git checkout -- config/config.php`.
 
 1. Создайте базу данных MySQL/MariaDB `migration_portal`.
-2. Примените схему и миграции по порядку:
+2. Примените схему и миграции по порядку (номер — порядок применения):
    ```bash
    mysql -u root migration_portal < db/schema.sql
-   mysql -u root migration_portal < db/migrations/002_employee_documents.sql
-   mysql -u root migration_portal < db/migrations/003_employee_name_parts.sql
-   mysql -u root migration_portal < db/migrations/004_document_scans_and_overrides.sql
+   for f in db/migrations/*.sql; do mysql -u root migration_portal < "$f"; done
    ```
-3. Установите зависимости (нужны для генерации .docx):
+3. Установите зависимости (нужны для генерации .docx/.xlsx):
    ```bash
    composer install
    ```
@@ -30,17 +28,25 @@
    php db/seed.php
    ```
    Учётные данные по умолчанию: `admin` / `admin123`.
-5. Запустите встроенный сервер PHP:
+5. (Опционально) наполните базу вымышленными данными для демонстрации —
+   сотрудники, документы разных статусов, демо-пользователи всех ролей:
+   ```bash
+   php db/demo_seed.php
+   ```
+   Демо-пользователи: `hr_demo`/`lawyer_demo`/`manager_demo`, пароль у
+   всех `Demo12345`. **Не запускайте на реальной проде с настоящими
+   сотрудниками.**
+6. Запустите встроенный сервер PHP:
    ```bash
    php -S localhost:8000
    ```
-6. Откройте `http://localhost:8000` и войдите под созданным администратором.
+7. Откройте `http://localhost:8000` и войдите под созданным администратором.
 
-Заполнение .docx-шаблонов по спецификации из
-[.agent-os/specs/2026-08-20-document-generation/](.agent-os/specs/2026-08-20-document-generation/)
-дополнительно требует положить реальный шаблон в `templates/` (см.
-[templates/README.md](templates/README.md)) — без него
-`document_generate.php` покажет понятную ошибку вместо файла.
+`templates/` уже содержит заглушечные .docx-шаблоны для всех пяти типов
+документов (не от заказчика — собственные, см.
+[templates/README.md](templates/README.md)) — генерация документов
+(`document_generate.php`) работает из коробки. Конвенция плейсхолдеров —
+в [.agent-os/specs/2026-08-20-document-generation/](.agent-os/specs/2026-08-20-document-generation/).
 
 ## Роли пользователей
 

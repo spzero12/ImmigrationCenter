@@ -36,9 +36,9 @@
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="documents.php">
-                            <span class="nav-link-icon"><i class="ti ti-file-text"></i></span>
-                            <span class="nav-link-title">Документы</span>
+                        <a class="nav-link" href="regions.php">
+                            <span class="nav-link-icon"><i class="ti ti-map-pin"></i></span>
+                            <span class="nav-link-title">Регионы</span>
                         </a>
                     </li>
                     <li class="nav-item">

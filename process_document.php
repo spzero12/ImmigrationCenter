@@ -7,6 +7,7 @@
 require __DIR__ . '/includes/auth.php';
 require_once __DIR__ . '/includes/processes.php';
 require_once __DIR__ . '/includes/audit.php';
+require_once __DIR__ . '/includes/document_sheet.php';
 requireLogin();
 
 $employeeId = (int) ($_GET['employee_id'] ?? $_POST['employee_id'] ?? 0);
@@ -62,8 +63,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     saveDocumentOverrides($db, $employeeId, $processType, $document, $overrides);
 
     if ($action === 'generate') {
-        $builder = $document === 'petition' ? 'buildPetition' : 'buildGuaranteeLetter';
-        $tmp = docxBuild($builder($values), letterheadPath($context['organization']));
+        $tmp = $document === 'petition' ? buildPetition($values) : buildGuaranteeLetter($values, $context['organization']);
         docxSend($tmp, $definition['label'] . ' ' . employeeFullNameRu($context['employee']) . '.docx');
     }
 
@@ -85,13 +85,10 @@ $overrideKeys = array_keys(array_filter(
 ));
 
 $employee = $context['employee'];
-$groups = [];
-
-foreach ($fieldDefinitions as $key => $field) {
-    $groups[$field[2]][$key] = $field;
-}
+$sheetHtml = renderDocumentSheet($document, $fieldDefinitions, $current, $defaults);
 
 $pageTitle = $definition['label'];
+$extraScripts = ['js/process_document.js'];
 require __DIR__ . '/includes/header.php';
 
 function pe($value): string
@@ -107,111 +104,65 @@ function pe($value): string
     </div>
 </div>
 
-<div class="row justify-content-center">
-    <div class="col-lg-9">
-        <?php if ($notice): ?>
-            <div class="alert alert-success"><?php echo pe($notice); ?></div>
-        <?php endif; ?>
-        <?php if (!$context['organization']): ?>
-            <div class="alert alert-warning">У сотрудника не указана организация — реквизиты пустые, бланк не применится.</div>
-        <?php elseif (!letterheadPath($context['organization'])): ?>
-            <div class="alert alert-info">У организации нет загруженного бланка — документ будет без оформления.</div>
-        <?php endif; ?>
-        <?php if (!$context['region']): ?>
-            <div class="alert alert-warning">У сотрудника не указан регион — адресат документа будет пустым.</div>
-        <?php endif; ?>
-        <?php if ($overrideKeys): ?>
-            <div class="alert alert-secondary d-flex justify-content-between align-items-center">
-                <span>Поля, отличающиеся от данных карточки, подсвечены (<?php echo count($overrideKeys); ?>).</span>
-                <form method="post" onsubmit="return confirm('Сбросить все правки к данным карточки?');">
-                    <input type="hidden" name="employee_id" value="<?php echo (int) $employee['id']; ?>">
-                    <input type="hidden" name="document" value="<?php echo pe($document); ?>">
-                    <input type="hidden" name="action" value="reset">
-                    <button type="submit" class="btn btn-sm btn-outline-secondary">Сбросить к данным карточки</button>
-                </form>
-            </div>
-        <?php endif; ?>
+<?php if ($notice): ?>
+    <div class="alert alert-success"><?php echo pe($notice); ?></div>
+<?php endif; ?>
+<?php if (!$context['organization']): ?>
+    <div class="alert alert-warning">У сотрудника не указана организация — реквизиты пустые<?php echo $document !== 'petition' ? ', бланк не применится' : ''; ?>.</div>
+<?php elseif ($document !== 'petition' && !letterheadPath($context['organization'])): ?>
+    <div class="alert alert-info">У организации нет загруженного бланка — документ будет без оформления.</div>
+<?php endif; ?>
+<?php if (!$context['region']): ?>
+    <div class="alert alert-warning">У сотрудника не указан регион — адресат документа будет пустым.</div>
+<?php endif; ?>
 
-        <form method="post">
-            <input type="hidden" name="employee_id" value="<?php echo (int) $employee['id']; ?>">
-            <input type="hidden" name="document" value="<?php echo pe($document); ?>">
+<form method="post" id="document-form">
+    <input type="hidden" name="employee_id" value="<?php echo (int) $employee['id']; ?>">
+    <input type="hidden" name="document" value="<?php echo pe($document); ?>">
+    <?php foreach ($fieldDefinitions as $key => $field): ?>
+        <input type="hidden" name="f[<?php echo pe($key); ?>]" value="<?php echo pe($current[$key]); ?>">
+    <?php endforeach; ?>
 
-            <?php if ($document === 'petition'): ?>
-                <div class="alert alert-light border">Фиксированные параметры процесса «Приглашение» (в образце не выделены красным): цель — <?php echo pe(INVITATION_TRIP['purpose']); ?>, срок — 90 дней, виза однократная, рабочая.</div>
-            <?php endif; ?>
-
-            <?php foreach ($groups as $groupTitle => $fields): ?>
-                <div class="card mb-3">
-                    <div class="card-header"><h3 class="card-title"><?php echo pe($groupTitle); ?></h3></div>
-                    <div class="card-body">
-                        <div class="row">
-                            <?php if ($groupTitle === 'Подписант'): ?>
-                                <div class="col-12 mb-3">
-                                    <label class="form-label">Подписант организации</label>
-                                    <select class="form-select" id="signer-select">
-                                        <option value="">— выбрать из списка (заполнит поля ниже) —</option>
-                                        <?php foreach ($context['signers'] as $signer): ?>
-                                            <option value="<?php echo (int) $signer['id']; ?>"
-                                                    data-position="<?php echo pe($signer['position']); ?>"
-                                                    data-name="<?php echo pe($signer['full_name']); ?>"
-                                                    data-short="<?php echo pe($signer['short_name']); ?>"><?php echo pe($signer['position'] . ' — ' . $signer['full_name']); ?></option>
-                                        <?php endforeach; ?>
-                                    </select>
-                                    <?php if ($context['organization'] && !$context['signers']): ?>
-                                        <div class="form-hint">У организации нет подписантов — <a href="organization_form.php?id=<?php echo (int) $context['organization']['id']; ?>#signers">добавьте</a> или впишите вручную.</div>
-                                    <?php endif; ?>
-                                </div>
-                            <?php endif; ?>
-                            <?php foreach ($fields as $key => $field): $readonly = $field[3] ?? false; $changed = in_array($key, $overrideKeys, true); ?>
-                                <div class="col-md-<?php echo in_array($field[1], ['date'], true) || in_array($key, ['org_inn', 'org_ogrn', 'org_kpp', 'stay_house', 'stay_corpus', 'stay_building', 'stay_flat'], true) ? '4' : '6'; ?> mb-3">
-                                    <label class="form-label"><?php echo pe($field[0]); ?></label>
-                                    <?php if ($field[1] === 'select'): ?>
-                                        <select class="form-select<?php echo $changed ? ' border-warning' : ''; ?>" name="f[<?php echo pe($key); ?>]">
-                                            <option value="">—</option>
-                                            <option value="male" <?php echo $current[$key] === 'male' ? 'selected' : ''; ?>>Мужской</option>
-                                            <option value="female" <?php echo $current[$key] === 'female' ? 'selected' : ''; ?>>Женский</option>
-                                        </select>
-                                    <?php else: ?>
-                                        <input type="<?php echo $field[1] === 'date' ? 'date' : 'text'; ?>"
-                                               class="form-control<?php echo $changed ? ' border-warning' : ''; ?>"
-                                               name="f[<?php echo pe($key); ?>]"
-                                               data-field="<?php echo pe($key); ?>"
-                                               value="<?php echo pe($current[$key]); ?>"
-                                               <?php echo $readonly ? 'readonly' : ''; ?>>
-                                    <?php endif; ?>
-                                    <?php if ($changed): ?>
-                                        <div class="form-hint text-warning">В карточке: <?php echo pe($defaults[$key] !== '' ? $defaults[$key] : '— пусто —'); ?></div>
-                                    <?php endif; ?>
-                                </div>
-                            <?php endforeach; ?>
-                        </div>
-                    </div>
+    <div class="card mb-3 sheet-toolbar">
+        <div class="card-body py-2 d-flex flex-wrap align-items-center gap-3">
+            <?php if (isset($fieldDefinitions['signer_name']) || isset($fieldDefinitions['signer_short'])): ?>
+                <div class="d-flex align-items-center gap-2">
+                    <label class="form-label mb-0 text-nowrap" for="signer-select">Подписант</label>
+                    <select class="form-select form-select-sm" id="signer-select">
+                        <option value="">— выбрать из списка —</option>
+                        <?php foreach ($context['signers'] as $signer): ?>
+                            <option value="<?php echo (int) $signer['id']; ?>"
+                                    data-position="<?php echo pe($signer['position']); ?>"
+                                    data-name="<?php echo pe($signer['full_name']); ?>"
+                                    data-short="<?php echo pe($signer['short_name']); ?>"><?php echo pe($signer['position'] . ' — ' . $signer['full_name']); ?></option>
+                        <?php endforeach; ?>
+                    </select>
                 </div>
-            <?php endforeach; ?>
-
-            <div class="form-footer d-flex gap-2">
+                <?php if ($context['organization'] && !$context['signers']): ?>
+                    <span class="form-hint">У организации нет подписантов — <a href="organization_form.php?id=<?php echo (int) $context['organization']['id']; ?>#signers">добавьте</a> или впишите вручную.</span>
+                <?php endif; ?>
+            <?php endif; ?>
+            <span class="text-secondary small sheet-legend">
+                <span class="legend-name">Красным</span> — поля для заполнения: нажмите на значение и правьте прямо в тексте (название поля — в подсказке).
+                <span class="legend-changed">Жёлтым</span> — отличается от карточки (подсказка — при наведении).
+            </span>
+            <div class="ms-auto d-flex gap-2">
+                <?php if ($overrideKeys): ?>
+                    <button type="submit" name="action" value="reset" class="btn btn-outline-secondary" formnovalidate
+                            onclick="return confirm('Сбросить все правки к данным карточки?');">Сбросить к карточке</button>
+                <?php endif; ?>
                 <a href="employee_form.php?id=<?php echo (int) $employee['id']; ?>#process" class="btn btn-link">К карточке</a>
                 <button type="submit" name="action" value="save" class="btn btn-outline-primary">Сохранить правки</button>
                 <button type="submit" name="action" value="generate" class="btn btn-primary"><i class="ti ti-download"></i> Сформировать .docx</button>
             </div>
-        </form>
+        </div>
     </div>
-</div>
 
-<script>
-    $(function () {
-        $('#signer-select').on('change', function () {
-            const $option = $(this).find('option:selected');
+    <div class="sheet-scroll">
+    <iframe id="sheet" class="sheet-frame" title="<?php echo pe($definition['label']); ?>" srcdoc="<?php echo pe($sheetHtml); ?>"></iframe>
+    </div>
+</form>
 
-            if (!$option.val()) {
-                return;
-            }
 
-            $('[data-field="signer_position"]').val($option.data('position'));
-            $('[data-field="signer_name"]').val($option.data('name'));
-            $('[data-field="signer_short"]').val($option.data('short'));
-        });
-    });
-</script>
 
 <?php require __DIR__ . '/includes/footer.php'; ?>

@@ -45,9 +45,17 @@
 7. Откройте `http://localhost:8000` и войдите под созданным администратором.
 
 Документы процесса «Приглашение» (Ходатайство, Гарантийное письмо) и Опись
-формируются в коде без .docx-шаблонов (`includes/processes.php`,
-`includes/docx_builder.php`). Если у организации загружен бланк (.docx с
-колонтитулами), он берётся за основу. Подробности —
+формируются по шаблонам `templates/processes/*.docx`, сделанным из образцов
+заказчика (`templates/samples/`, пересборка — `php templates/build_templates.php`):
+шаблон повторяется полностью, подставляются значения `${ключ}`
+(`includes/docx_template.php`, `includes/processes.php`). Если у организации
+загружен бланк (.docx с колонтитулами), его колонтитулы переносятся в
+Гарантийное письмо и Опись; Ходатайство — форма МВД, выдаётся без бланка.
+Страница редактирования Ходатайства и Гарантийного письма показывает «лист
+Word» (`templates/processes/*.html`, `includes/document_sheet.php`) с полями
+прямо в тексте. Эти HTML делаются из шаблонов .docx через Word:
+`powershell -ExecutionPolicy Bypass -File templates\build_html.ps1` (после
+`php templates/build_templates.php`; при изменении шаблона пересобрать оба). Подробности —
 [.agent-os/specs/2026-10-04-employee-card-processes/](.agent-os/specs/2026-10-04-employee-card-processes/).
 
 ## Роли пользователей

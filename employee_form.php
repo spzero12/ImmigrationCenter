@@ -128,8 +128,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 
-    if ($employee['last_name'] === '' || $employee['first_name'] === '') {
-        $errors[] = 'Укажите фамилию и имя сотрудника';
+    if ($employee['first_name'] === '') {
+        $errors[] = 'Укажите имя сотрудника';
     }
 
     // Сканы валидируем и сохраняем до записи в БД, чтобы ошибка скана не
@@ -303,8 +303,8 @@ function e($value): string
                 <div class="card-body">
                     <div class="row">
                         <div class="col-md-4 mb-3">
-                            <label class="form-label required">Фамилия</label>
-                            <input type="text" class="form-control" name="last_name" value="<?php echo e($employee['last_name']); ?>" required>
+                            <label class="form-label">Фамилия</label>
+                            <input type="text" class="form-control" name="last_name" value="<?php echo e($employee['last_name']); ?>">
                         </div>
                         <div class="col-md-4 mb-3">
                             <label class="form-label required">Имя</label>

@@ -56,6 +56,7 @@ require __DIR__ . '/includes/header.php';
         <span class="indicator indicator-yellow ms-3"></span> скоро
         <span class="indicator indicator-green ms-3"></span> в порядке
         <span class="indicator indicator-none ms-3"></span> нет данных.
+        Строка с красным сроком обведена красной рамкой, с жёлтым — оранжевой; у жёлтых и красных значений подписан тип документа.
         Пороги отличаются по типам документов (паспорт: &lt;180 / 180–360 / &gt;360 дней; виза и РНР: 60 / 90; МУ и мед. справка: 30 / 60; ДМС: 14 / 30).
     </div>
 </div>

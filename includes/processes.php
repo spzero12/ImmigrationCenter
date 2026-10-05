@@ -13,7 +13,7 @@
 // Спецификация: .agent-os/specs/2026-10-04-employee-card-processes/spec.md
 
 require_once __DIR__ . '/documents.php';
-require_once __DIR__ . '/docx_builder.php';
+require_once __DIR__ . '/docx_template.php';
 
 const PROCESS_TYPES = [
     'invitation' => [
@@ -337,121 +337,52 @@ function saveDocumentOverrides(PDO $db, int $employeeId, string $processType, st
     )->execute([$processId, $document, $overrides ? json_encode($overrides, JSON_UNESCAPED_UNICODE) : null]);
 }
 
-function genderMark(array $v, string $gender): string
+// Документы формируются по шаблонам templates/processes/*.docx (сделаны из
+// образцов заказчика, см. templates/build_templates.php): шаблон повторяется
+// полностью, подставляются только значения полей.
+
+function dotDate(?string $date): string
 {
-    return ($v['gender'] ?? '') === $gender ? '[X]' : '[ ]';
+    if (!$date) {
+        return '';
+    }
+
+    $parsed = DateTimeImmutable::createFromFormat('Y-m-d', $date);
+
+    return $parsed ? $parsed->format('d.m.Y') : $date;
 }
 
-// Гарантийное письмо — по образцу заказчика (samples/).
-function buildGuaranteeLetter(array $v): string
+// Бланк организации в документ процесса: применяется к гарантийному письму
+// и описи; Ходатайство — установленная МВД форма, она выдаётся без бланка.
+function buildGuaranteeLetter(array $v, ?array $organization): string
 {
-    $requisites = trim($v['org_full_name'] . ', ' . $v['org_legal_address'] . ",\nИНН: " . $v['org_inn'] . ' ОГРН: ' . $v['org_ogrn'] . ' КПП: ' . $v['org_kpp'] . ' ' . $v['org_phone']);
+    $values = $v;
+    $values['document_date'] = slashDate($v['document_date']);
+    $values['birth_date'] = slashDate($v['birth_date']);
+    $values['passport_issue_date'] = slashDate($v['passport_issue_date']);
+    $values['passport_expire_date'] = slashDate($v['passport_expire_date']);
+    [$values['stay_address_1'], $values['stay_address_2']] = addressLines($v['stay_address']);
 
-    $body = docxPara('Начальнику (руководителю)', ['indent' => 5529, 'after' => 0]);
-    $body .= docxPara('УВМ ГУ МВД России по ' . $v['region_dative'], ['indent' => 5529, 'after' => 0, 'bold' => true]);
-    $body .= docxCaption('(наименование уполномоченного подразделения, подразделения по вопросам миграции территориального органа МВД России)', ['indent' => 5529, 'size' => 7]);
-    $body .= docxPara('', ['indent' => 5529, 'after' => 0]);
-    $body .= docxCaption('(Ф.И.О.)', ['indent' => 5529, 'size' => 7]);
-    $body .= docxPara($requisites, ['align' => 'center', 'size' => 9, 'after' => 0, 'indent' => 680, 'right_indent' => 680]);
-    $body .= docxCaption('(наименование, организационно-правовая форма, юридический адрес, ИНН/ОГРН/КПП, телефон)', ['indent' => 680, 'right_indent' => 680, 'size' => 7]);
-    $body .= docxPara('Исх. № б/н от ' . slashDate($v['document_date']) . ' г.', ['after' => 12]);
-    $body .= docxPara('ГАРАНТИЙНОЕ ПИСЬМО', ['align' => 'center', 'bold' => true, 'size' => 14, 'after' => 12]);
-    $body .= docxPara($v['org_short_name'] . ', выступая приглашающей стороной в отношении приглашаемого иностранного гражданина (лица без гражданства):', ['align' => 'both']);
-
-    $person = 'гр. ' . $v['citizenship'] . ', ' . $v['person_name'] . ', ' . slashDate($v['birth_date']) . ' г.р., паспорт ' . $v['passport_number']
-        . ($v['passport_issue_date'] !== '' ? ' выдан ' . slashDate($v['passport_issue_date']) : '')
-        . ($v['passport_expire_date'] !== '' ? ' до ' . slashDate($v['passport_expire_date']) : '');
-    $body .= docxPara($person, ['align' => 'both', 'after' => 0, 'bold' => true]);
-    $body .= docxCaption('(гражданство, фамилия, имя, отчество (при наличии), дата рождения, сведения о документе, удостоверяющем личность)');
-    $body .= docxPara('гарантирует ему материальное, медицинское и жилищное обеспечение, а именно:', ['align' => 'both']);
-    $body .= docxPara('1. Обязуется предоставить возможность для его проживания по адресу: ' . $v['stay_address'], ['align' => 'both', 'after' => 0]);
-    $body .= docxCaption('(указывается адрес, где предполагается пребывание приглашаемого иностранного гражданина (лица без гражданства))');
-    $body .= docxPara('2. Обеспечить медицинской помощью на период его пребывания в Российской Федерации на основании договора (полиса) добровольного медицинского страхования либо договора о предоставлении платных медицинских услуг, если иное не предусмотрено международным договором Российской Федерации и (или) федеральными законами Российской Федерации, или предоставить, при необходимости, денежные средства для получения им медицинской помощи.', ['align' => 'both']);
-    $body .= docxPara('3. Обязуется предоставить денежные средства, необходимые для выезда из Российской Федерации по окончании срока его пребывания в Российской Федерации.', ['align' => 'both', 'after' => 24]);
-    $body .= docxPara($v['signer_position'], ['after' => 0, 'bold' => true]);
-    $body .= docxPara('____________________   ' . $v['signer_name'], ['after' => 0, 'align' => 'right']);
-    $body .= docxCaption('(подпись, расшифровка подписи)', ['indent' => 4000]);
-
-    return $body;
+    return docxFromTemplate('guarantee_letter', $values, letterheadPath($organization));
 }
 
-// Ходатайство о выдаче приглашения (приложение № 1 к приказу МВД № 677) —
-// структура формы (разделы 1–3, подпись) в табличной вёрстке, не копия
-// бланка. Сопровождающие лица (раздел 4) пока не заполняются.
 function buildPetition(array $v): string
 {
-    $trip = INVITATION_TRIP;
-    $mark = static fn(bool $on): string => $on ? '[X]' : '[ ]';
-    $multiplicity = implode('   ', array_map(
-        static fn($key, $label) => $mark($trip['multiplicity'] === $key) . ' ' . $label,
-        array_keys(VISA_MULTIPLICITY_LABELS),
-        VISA_MULTIPLICITY_LABELS
-    ));
-    $visaKind = implode('   ', array_map(
-        static fn($key, $label) => $mark($trip['visa_kind'] === $key) . ' ' . $label,
-        array_keys(VISA_KIND_LABELS),
-        VISA_KIND_LABELS
-    ));
-    $gender = genderMark($v, 'male') . ' мужской   ' . genderMark($v, 'female') . ' женский';
     $upper = static fn(string $s): string => mb_strtoupper($s);
+    $values = $v;
+    $values['document_date'] = dotDate($v['document_date']);
+    $values['org_egrul_date'] = dotDate($v['org_egrul_date']);
+    $values['birth_date'] = slashDate($v['birth_date']);
+    $values['passport_issue_date'] = slashDate($v['passport_issue_date']);
+    $values['passport_expire_date'] = slashDate($v['passport_expire_date']);
+    $values['gender_male'] = ($v['gender'] ?? '') === 'male' ? 'X' : '';
+    $values['gender_female'] = ($v['gender'] ?? '') === 'female' ? 'X' : '';
 
-    $row = static fn(string $label, string $value): array => [$label, $value];
-    $section = static fn(string $title): array => [['text' => $title, 'bold' => true, 'span' => 2, 'shade' => 'D9D9D9']];
+    foreach (['birth_country', 'birth_place', 'citizenship', 'residence_country', 'residence_region', 'visa_country', 'visa_city'] as $key) {
+        $values[$key] = $upper($v[$key]);
+    }
 
-    $body = docxPara('Приложение № 1 к Административному регламенту МВД России по предоставлению государственной услуги по оформлению и выдаче приглашений на въезд в Российскую Федерацию иностранных граждан и лиц без гражданства, утверждённому приказом МВД России от 29.09.2020 № 677', ['size' => 8, 'align' => 'right', 'indent' => 5000, 'after' => 8]);
-    $body .= docxPara('ХОДАТАЙСТВО', ['align' => 'center', 'bold' => true, 'size' => 14, 'after' => 0]);
-    $body .= docxPara('о выдаче приглашения на въезд в Российскую Федерацию для приглашающей организации', ['align' => 'center', 'after' => 4]);
-    $body .= docxPara('УВМ ГУ МВД России по ' . $v['region_dative'], ['align' => 'center', 'size' => 10, 'after' => 8]);
-
-    $body .= docxTable([
-        $section('1. Сведения о приглашающей организации'),
-        $row('Исх. №', ''),
-        $row('Дата', slashDate($v['document_date'])),
-        $row('1.1. Полное наименование', $v['org_full_name']),
-        $row('ИНН', $v['org_inn']),
-        $row('ОГРН', $v['org_ogrn']),
-        $row('Дата внесения записи в ЕГРЮЛ', slashDate($v['org_egrul_date'])),
-        $row('1.2. Место нахождения (почтовый)', $v['org_legal_address']),
-        $row('Фактический', $v['org_actual_address']),
-        $row('Телефон', $v['org_phone']),
-        $row('Адрес электронной почты', $v['org_email']),
-        $section('2. Сведения о поездке'),
-        $row('2.1. Цель поездки', $trip['purpose']),
-        $row('2.2. На срок (дней)', $trip['stay_days']),
-        $row('2.3. Предполагаемый въезд с', ''),
-        $row('2.4. Пребывание по', ''),
-        $row('2.5. Кратность визы', $multiplicity),
-        $row('2.6. Вид визы', $visaKind),
-        $row('2.7. Пункты посещения в РФ', $v['visit_places']),
-        $section('3. Сведения о приглашаемом лице'),
-        $row('3.1. Фамилия рус.', $v['last_name']),
-        $row('3.2. Фамилия лат.', $v['last_name_lat']),
-        $row('3.3. Имя рус.', $v['first_name']),
-        $row('3.4. Имя лат.', $v['first_name_lat']),
-        $row('3.5. Отчество рус.', $v['middle_name']),
-        $row('3.6. Отчество лат.', $v['middle_name_lat']),
-        $row('3.7. Пол', $gender),
-        $row('3.8. Дата рождения', slashDate($v['birth_date'])),
-        $row('3.9. Государство рождения', $upper($v['birth_country'])),
-        $row('3.10. Место рождения', $upper($v['birth_place'])),
-        $row('3.11. Гражданство (подданство)', $upper($v['citizenship'])),
-        $row('3.12. Государство постоянного проживания', $upper($v['residence_country'])),
-        $row('3.13. Регион', $upper($v['residence_region'])),
-        $row('3.14. Место получения визы', trim($upper($v['visa_country']) . ', ' . $upper($v['visa_city']), ', ')),
-        $row('3.15. Место работы за рубежом', $v['foreign_workplace']),
-        $row('3.16. Документ, удостоверяющий личность', 'Серия: ' . $v['passport_series'] . '   Номер: ' . $v['passport_number']
-            . "\nКем выдан: " . $v['passport_issued_by']
-            . "\nДата выдачи: " . slashDate($v['passport_issue_date']) . '   Действителен до: ' . slashDate($v['passport_expire_date'])),
-        $row('3.17. Адрес предполагаемого места пребывания', stayAddressLine($v) . ($v['stay_phone'] !== '' ? "\nТелефон: " . $v['stay_phone'] : '')),
-        $row('3.18. Ранее имевшиеся установочные данные', 'нет'),
-    ], [3300, 6200]);
-
-    $body .= docxPara('ОБ ОТВЕТСТВЕННОСТИ ЗА СООБЩЕНИЕ ЛОЖНЫХ СВЕДЕНИЙ В ХОДАТАЙСТВЕ ИЛИ ПРЕДСТАВЛЕНИЕ ПОДДЕЛЬНЫХ ДОКУМЕНТОВ ПРЕДУПРЕЖДЁН. С СОДЕРЖАНИЕМ СТАТЕЙ 26, 27 ФЕДЕРАЛЬНОГО ЗАКОНА «О ПОРЯДКЕ ВЫЕЗДА ИЗ РОССИЙСКОЙ ФЕДЕРАЦИИ И ВЪЕЗДА В РОССИЙСКУЮ ФЕДЕРАЦИЮ» ОЗНАКОМЛЕН. С АВТОМАТИЗИРОВАННОЙ ОБРАБОТКОЙ, ПЕРЕДАЧЕЙ И ХРАНЕНИЕМ ДАННЫХ, УКАЗАННЫХ В ХОДАТАЙСТВЕ, СОГЛАСЕН.', ['size' => 9, 'align' => 'both', 'before' => 6]);
-    $body .= docxPara('[X] Подтверждаю достоверность указанных в заявлении сведений на приглашаемое лицо.', ['size' => 10]);
-    $body .= docxPara($v['signer_position'] . ', ____________________   ' . $v['signer_short'], ['after' => 0, 'before' => 8]);
-    $body .= docxCaption('(фамилия, инициалы уполномоченного лица, подпись)  М.П.', ['align' => 'left']);
-
-    return $body;
+    return docxFromTemplate('petition', $values);
 }
 
 // Опись документов, принятых к рассмотрению (приложение № 2 к инструкции
@@ -460,48 +391,70 @@ function buildPetition(array $v): string
 function buildInventory(array $contexts, array $header, ?array $organization, ?array $region): string
 {
     $regionDative = $region['name_dative'] ?? '';
-
-    $body = docxPara('Приложение № 2 к инструкции об организации деятельности органов внутренних дел РФ по оформлению и выдаче приглашений на въезд в РФ иностранных граждан и лиц без гражданства, учёту и хранению бланков приглашений', ['size' => 8, 'align' => 'right', 'indent' => 5000]);
-    $body .= docxPara('СПРАВКА № ' . $header['reference_number'], ['bold' => true, 'align' => 'center', 'size' => 13, 'after' => 0]);
-    $body .= docxPara('НОМЕР УЧЁТНОЙ КАРТОЧКИ: ' . $header['card_number'], ['align' => 'center', 'after' => 10]);
-    $body .= docxPara('Дана: ' . $header['applicant'], ['after' => 0]);
-    $body .= docxCaption('(Ф.И.О. заявителя — уполномоченного представителя организации)', ['align' => 'left']);
-    $body .= docxPara('в том, что ' . slashDate($header['accept_date']) . ' от него (неё) принято к рассмотрению заявление о выдаче приглашения.', ['after' => 0]);
-    $body .= docxCaption('(дата приёма заявления о приглашении)', ['align' => 'left']);
-    $body .= docxPara($header['officer'], ['after' => 0]);
-    $body .= docxCaption('(должность, Ф.И.О. сотрудника УВМ ГУ МВД России по ' . $regionDative . ')', ['align' => 'left']);
-    $body .= docxPara('Приложение согласно описи:', ['after' => 10]);
-    $body .= docxPara('ОПИСЬ', ['bold' => true, 'align' => 'center', 'size' => 13, 'after' => 0]);
-    $body .= docxPara('документов, принятых к рассмотрению в УВМ ГУ МВД России по ' . $regionDative . ' на приглашение иностранных граждан', ['align' => 'center', 'after' => 8]);
-
-    $rows = [[
-        ['text' => '№ п/п', 'bold' => true, 'align' => 'center'],
-        ['text' => 'Гражданство', 'bold' => true, 'align' => 'center'],
-        ['text' => 'Фамилия, Имя', 'bold' => true, 'align' => 'center'],
-        ['text' => '№ паспорта', 'bold' => true, 'align' => 'center'],
-        ['text' => 'Кратность', 'bold' => true, 'align' => 'center'],
-    ]];
+    $regionLong = preg_replace('/^г\.\s*/u', 'городу ', $regionDative);
 
     // Кратность — параметр процесса "Приглашение" (в образце ходатайства
     // фиксированный), одинаков для всех.
     $multiplicity = mb_strtoupper(VISA_MULTIPLICITY_LABELS[INVITATION_TRIP['multiplicity']]);
+    $rows = [];
 
     foreach ($contexts as $i => $c) {
         $e = $c['employee'];
         $rows[] = [
-            ['text' => (string) ($i + 1), 'align' => 'center'],
-            mb_strtoupper((string) $e['citizenship']),
-            mb_strtoupper(trim($e['last_name'] . ' ' . $e['first_name'])),
-            passportNumber($c),
-            $multiplicity,
+            'citizenship' => mb_strtoupper((string) $e['citizenship']),
+            'full_name' => mb_strtoupper(trim($e['last_name'] . ' ' . $e['first_name'])),
+            'passport' => passportNumber($c),
+            'multiplicity' => $multiplicity,
         ];
     }
 
-    $body .= docxTable($rows, [800, 2000, 3300, 1700, 1700]);
-    $body .= docxPara('М.П.', ['before' => 12, 'after' => 0]);
-    $body .= docxPara('Приглашающая организация: ' . organizationDisplayName($organization), ['after' => 0]);
-    $body .= docxPara('____________________   ' . $header['signer'], ['after' => 0]);
-    $body .= docxCaption('(ФИО ответственного лица)', ['align' => 'left']);
+    $values = [
+        'reference_number' => $header['reference_number'],
+        'card_number' => $header['card_number'],
+        'applicant' => $header['applicant'] !== '' ? $header['applicant'] : str_repeat('_', 40),
+        'accept_date' => slashDate($header['accept_date']),
+        'officer' => $header['officer'],
+        'region_dative' => $regionDative,
+        'region_dative_long' => $regionLong,
+        'signer_name' => $header['signer'],
+    ];
 
-    return $body;
+    return docxFromTemplate('inventory', $values, letterheadPath($organization), $rows);
+}
+
+// Адрес в гарантийном письме пишется на двух линиях бланка. Делим по словам:
+// первая линия — сколько помещается по ширине (оценка по ширине символов
+// Times New Roman 12 пт, строка 41 em), остаток — на вторую линию.
+function addressLines(string $address, float $lineEm = 37.0): array
+{
+    $width = static function (string $text): float {
+        $sum = 0.0;
+
+        foreach (mb_str_split($text) as $char) {
+            $sum += match (true) {
+                $char === ' ' => 0.25,
+                (bool) preg_match('/[\d]/u', $char) => 0.5,
+                (bool) preg_match('/[,.;:\-()«»"\/]/u', $char) => 0.27,
+                mb_strtoupper($char) === $char && preg_match('/\p{L}/u', $char) => 0.7,
+                default => 0.47,
+            };
+        }
+
+        return $sum;
+    };
+
+    $words = preg_split('/\s+/u', trim($address), -1, PREG_SPLIT_NO_EMPTY);
+    $first = '';
+
+    foreach ($words as $i => $word) {
+        $candidate = $first === '' ? $word : $first . ' ' . $word;
+
+        if ($first !== '' && $width($candidate) > $lineEm) {
+            return [$first, implode(' ', array_slice($words, $i))];
+        }
+
+        $first = $candidate;
+    }
+
+    return [$first, ''];
 }

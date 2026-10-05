@@ -7,6 +7,17 @@ $(function () {
     // Столбцы со сроками — по эскизу заказчика; тип документа => ключ docs.
     const DATE_COLUMNS = ['passport', 'visa', 'work_permit', 'registration', 'medical_certificate', 'dms'];
 
+    // Названия типов — подпись у жёлтых и красных значений: в длинной таблице
+    // иначе не понять, к какому столбцу относится кружок.
+    const DOC_LABELS = {
+        passport: 'Паспорт',
+        visa: 'Виза',
+        work_permit: 'РНР',
+        registration: 'МУ',
+        medical_certificate: 'Мед. справка',
+        dms: 'ДМС',
+    };
+
     const selectedIds = new Set();
 
     function escapeHtml(text) {
@@ -33,31 +44,55 @@ $(function () {
         return '<span class="avatar avatar-sm rounded">' + escapeHtml(initials) + '</span>';
     }
 
-    function dateCell(doc) {
+    function dateCell(doc, type) {
         if (!doc || !doc.expire_date) {
             return '<td class="text-nowrap"><span class="indicator indicator-none"></span></td>';
         }
 
         const days = doc.indicator.days;
-        const title = days < 0 ? 'просрочено на ' + (-days) + ' дн.' : 'осталось ' + days + ' дн.';
+        const title = DOC_LABELS[type] + ': ' + (days < 0 ? 'просрочено на ' + (-days) + ' дн.' : 'осталось ' + days + ' дн.');
+        const flag = doc.indicator.key === 'red' || doc.indicator.key === 'yellow'
+            ? '<span class="doc-flag doc-flag-' + doc.indicator.key + '">' + DOC_LABELS[type] + '</span>'
+            : '';
 
-        return '<td class="text-nowrap"><span class="indicator indicator-' + doc.indicator.key + '" title="' + title + '"></span> ' +
+        return '<td class="text-nowrap" title="' + title + '">' + flag +
+            '<span class="indicator indicator-' + doc.indicator.key + '"></span> ' +
             escapeHtml(formatDate(doc.expire_date)) + '</td>';
     }
 
+    // Строка выделяется рамкой по худшему сроку: есть красный — красная,
+    // иначе есть жёлтый — оранжевая.
+    function rowAlertClass(docs) {
+        const keys = DATE_COLUMNS.map(function (type) {
+            return docs[type] && docs[type].expire_date ? docs[type].indicator.key : null;
+        });
+
+        if (keys.indexOf('red') !== -1) {
+            return 'row-alert-red';
+        }
+
+        return keys.indexOf('yellow') !== -1 ? 'row-alert-yellow' : '';
+    }
+
     // Регион ▾ → РНР (1 год) ▾ → Приглашение ▾ → документы процесса.
-    // Второй уровень пока единственный; остальные пункты появятся позже.
+    // Все уровни раскрыты сразу, любой можно свернуть. Второй уровень пока
+    // единственный; остальные пункты появятся позже.
+    function wordItem(label, href) {
+        return '<li><a href="' + href + '"><i class="ti ti-file-word doc-icon"></i>' + label + '</a>' +
+            '<span class="doc-format">word</span></li>';
+    }
+
     function documentsCell(employee) {
         const base = 'process_document.php?employee_id=' + encodeURIComponent(employee.id) + '&document=';
 
         return '<td class="documents-cell">' +
-            '<details><summary>' + escapeHtml(employee.region_name || 'Без региона') + '</summary>' +
-            '<details><summary>РНР (1 год)</summary>' +
-            '<details><summary>Приглашение</summary>' +
-            '<ul class="list-unstyled mb-0">' +
-            '<li><a href="' + base + 'petition">Ходатайство</a> <span class="text-secondary">(word)</span></li>' +
-            '<li><a href="' + base + 'guarantee_letter">Гарантийное письмо</a> <span class="text-secondary">(word)</span></li>' +
-            '<li><span class="text-secondary">Доверенность — скоро</span></li>' +
+            '<details class="doc-level" open><summary>' + escapeHtml(employee.region_name || 'Без региона') + '</summary>' +
+            '<details class="doc-level" open><summary>РНР (1 год)</summary>' +
+            '<details class="doc-level" open><summary>Приглашение</summary>' +
+            '<ul class="doc-list">' +
+            wordItem('Ходатайство', base + 'petition') +
+            wordItem('Гарантийное письмо', base + 'guarantee_letter') +
+            '<li class="doc-soon"><i class="ti ti-file-word doc-icon"></i>Доверенность<span class="doc-format">скоро</span></li>' +
             '</ul></details></details></details></td>';
     }
 
@@ -103,14 +138,14 @@ $(function () {
                 '<td>' + escapeHtml(passport ? passport.number : '') + '</td>';
 
             DATE_COLUMNS.forEach(function (type) {
-                cells += dateCell(docs[type]);
+                cells += dateCell(docs[type], type);
             });
 
             cells += documentsCell(employee) +
                 '<td class="row-actions text-end"><a href="employee_form.php?id=' + encodeURIComponent(employee.id) + '">Изменить</a>' +
                 deleteBtn + '</td>';
 
-            $tableBody.append($('<tr>').html(cells));
+            $tableBody.append($('<tr>').addClass(rowAlertClass(docs)).html(cells));
         });
     }
 

@@ -45,8 +45,88 @@
 .indicator-green { background: #2fb344; }
 .indicator-none { background: #cbd5e1; }
 
-/* Вложенное раскрытие в ячейке "Документы": регион → РНР → процесс. */
-.documents-cell details { margin-left: 0.75rem; }
-.documents-cell > details { margin-left: 0; }
-.documents-cell summary { cursor: pointer; white-space: nowrap; }
-.documents-cell ul { margin-left: 1rem; font-size: 0.85rem; }
+/* Ячейка "Документы": дерево регион → РНР → процесс → документы, раскрытое
+   сразу, в строгом офисном оформлении — тонкие разделители уровней (как на
+   эскизе заказчика), шевроны, значки Word. */
+.documents-cell { min-width: 17rem; font-size: 0.85rem; }
+
+.documents-cell .doc-level { border-top: 1px solid var(--tblr-border-color, #e6e7e9); }
+.documents-cell > .doc-level { border-top: 0; }
+.documents-cell .doc-level .doc-level { margin-left: 0.9rem; }
+
+.documents-cell summary {
+    display: flex;
+    align-items: center;
+    padding: 0.25rem 0;
+    cursor: pointer;
+    list-style: none;
+    font-weight: 600;
+    color: var(--tblr-body-color, #1f2937);
+    white-space: nowrap;
+}
+
+.documents-cell summary::-webkit-details-marker { display: none; }
+
+.documents-cell summary::before {
+    content: '';
+    width: 0.4rem;
+    height: 0.4rem;
+    border-right: 2px solid currentColor;
+    border-bottom: 2px solid currentColor;
+    transform: rotate(45deg);
+    margin: 0 0.5rem 0.2rem 0.1rem;
+    opacity: 0.55;
+}
+
+.documents-cell details:not([open]) > summary::before { transform: rotate(-45deg); margin-bottom: 0; }
+.documents-cell summary:hover { color: var(--tblr-primary, #206bc4); }
+
+.documents-cell .doc-list { margin: 0 0 0.25rem 1.1rem; padding: 0; list-style: none; }
+.documents-cell .doc-list li { display: flex; align-items: baseline; gap: 0.4rem; padding: 0.15rem 0; white-space: nowrap; }
+.documents-cell .doc-icon { color: #2b579a; margin-right: 0.3rem; vertical-align: -2px; }
+.documents-cell .doc-format { color: var(--tblr-secondary, #6b7280); font-size: 0.75rem; }
+.documents-cell .doc-format::before { content: '('; }
+.documents-cell .doc-format::after { content: ')'; }
+.documents-cell .doc-soon { color: var(--tblr-secondary, #6b7280); }
+.documents-cell .doc-soon .doc-icon { color: inherit; opacity: 0.5; }
+
+/* Страница документа процесса (process_document.php): «лист Word» в iframe
+   с редактируемыми полями; сам лист стилизует includes/document_sheet.php. */
+.sheet-scroll { overflow-x: auto; }
+.sheet-frame { display: block; width: 100%; min-width: 830px; min-height: 70vh; border: 1px solid var(--tblr-border-color, #dfe3e8); border-radius: 4px; background: #dfe3e8; }
+.sheet-toolbar { position: sticky; top: 0; z-index: 5; }
+.sheet-legend .legend-name { color: #d63939; font-weight: 600; font-size: 0.75rem; }
+.sheet-legend .legend-changed { background: #fff3cd; padding: 0 0.25rem; border-radius: 2px; }
+
+/* Таблица сотрудников: подпись типа документа у жёлтых/красных сроков и
+   рамка строки по худшему сроку (красная — есть красный, оранжевая — жёлтый). */
+.doc-flag {
+    display: block;
+    font-size: 0.65rem;
+    font-weight: 600;
+    line-height: 1;
+    margin-bottom: 2px;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+}
+
+.doc-flag-red { color: #d63939; }
+.doc-flag-yellow { color: #d97706; }
+
+#employees-table tr.row-alert-red > td,
+#employees-table tr.row-alert-yellow > td {
+    border-top-width: 2px !important;
+    border-bottom-width: 2px !important;
+    border-style: solid !important;
+    border-left-width: 0 !important;
+    border-right-width: 0 !important;
+}
+
+#employees-table tr.row-alert-red > td { border-color: #d63939 !important; background: rgba(214, 57, 57, 0.04); }
+#employees-table tr.row-alert-yellow > td { border-color: #f59f00 !important; background: rgba(245, 159, 0, 0.05); }
+
+#employees-table tr.row-alert-red > td:first-child,
+#employees-table tr.row-alert-yellow > td:first-child { border-left-width: 2px !important; }
+
+#employees-table tr.row-alert-red > td:last-child,
+#employees-table tr.row-alert-yellow > td:last-child { border-right-width: 2px !important; }

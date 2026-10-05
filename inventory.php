@@ -58,8 +58,8 @@ if (!$error && $_SERVER['REQUEST_METHOD'] === 'POST') {
         'signer' => $signer['full_name'] ?? '',
     ];
 
-    $bodyXml = buildInventory($contexts, $header, $organization, $region);
-    docxSend(docxBuild($bodyXml, letterheadPath($organization)), 'Опись ' . date('d.m.Y') . '.docx');
+    $tmp = buildInventory($contexts, $header, $organization, $region);
+    docxSend($tmp, 'Опись ' . date('d.m.Y') . '.docx');
 }
 
 $pageTitle = 'Опись';

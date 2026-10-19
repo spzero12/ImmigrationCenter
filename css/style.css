@@ -130,3 +130,138 @@
 
 #employees-table tr.row-alert-red > td:last-child,
 #employees-table tr.row-alert-yellow > td:last-child { border-right-width: 2px !important; }
+/* Мобильная версия: строки таблицы сотрудников превращаются в карточки,
+   подпись столбца берётся из data-label. */
+@media (max-width: 991.98px) {
+    #employees-table thead { display: none; }
+
+    #employees-table,
+    #employees-table tbody,
+    #employees-table tr,
+    #employees-table td { display: block; width: 100%; }
+
+    #employees-table tr { padding: 0.5rem 0.75rem; border-bottom: 1px solid var(--tblr-border-color, #e6e7e9); position: relative; }
+    #employees-table tr.table-group-header { padding: 0; }
+
+    #employees-table td { border: 0 !important; padding: 0.2rem 0 !important; background: none !important; }
+
+    #employees-table td[data-label] { display: flex; justify-content: space-between; align-items: flex-start; gap: 0.75rem; }
+    #employees-table td[data-label]::before { content: attr(data-label); color: var(--tblr-secondary, #6b7280); font-size: 0.8rem; flex: 0 0 auto; }
+    #employees-table td.documents-cell { display: block; min-width: 0; }
+    #employees-table td.documents-cell::before { display: block; margin-bottom: 0.2rem; }
+    #employees-table .doc-flag { display: inline; margin: 0 0.35rem 0 0; }
+
+    #employees-table td.cell-select { position: absolute; top: 0.6rem; right: 0.75rem; width: auto; }
+    #employees-table td.cell-name { padding-right: 2rem !important; }
+    #employees-table td.row-actions { text-align: left !important; padding-top: 0.5rem !important; }
+
+    #employees-table tr.row-alert-red { border: 2px solid #d63939; background: rgba(214, 57, 57, 0.04); }
+    #employees-table tr.row-alert-yellow { border: 2px solid #f59f00; background: rgba(245, 159, 0, 0.05); }
+}
+
+@media (max-width: 991.98px) {
+    #employees-table tr.row-alert-red > td,
+    #employees-table tr.row-alert-yellow > td,
+    #employees-table tr.row-alert-red > td:first-child,
+    #employees-table tr.row-alert-yellow > td:first-child,
+    #employees-table tr.row-alert-red > td:last-child,
+    #employees-table tr.row-alert-yellow > td:last-child { border: 0 !important; background: none !important; }
+
+    #employees-table td[data-label] { justify-content: flex-start; align-items: center; gap: 0.4rem; }
+    #employees-table td[data-label]::before { flex: 0 0 7.5rem; }
+    #employees-table td.documents-cell { display: block; }
+}
+
+/* Строка быстрых фильтров под заголовками таблицы сотрудников. */
+#employees-table .column-filters th { padding: 0.25rem 0.5rem; font-weight: normal; text-transform: none; }
+#employees-table .column-filter { min-width: 5rem; }
+
+/* ПК: таблица не сжимается уже минимальной ширины — вместо этого у
+   .table-responsive появляется горизонтальная прокрутка (только если
+   таблица не помещается). */
+@media (min-width: 992px) {
+    #employees-table { table-layout: fixed; width: 100%; min-width: 92.5rem; }
+}
+
+/* ПК: если таблица не помещается в полную ширину (1500px) — в ячейках сроков
+   остаются только цветные значки (даты видны во всплывающей подсказке), а
+   минимальная ширина падает до 1100px; прокрутка появляется лишь ниже неё. */
+.employees-wrap { container: employees / inline-size; }
+
+@media (min-width: 992px) {
+    @container employees (max-width: 1479px) {
+        #employees-table { min-width: 74.5rem; }
+        #employees-table .doc-date { display: none; }
+    }
+}
+
+/* ПК: таблица прокручивается внутри своего блока, поэтому горизонтальная
+   полоса всегда у нижнего края окна, а не под всеми строками; заголовок и
+   строка фильтров остаются на месте при вертикальной прокрутке. */
+@media (min-width: 992px) {
+    .employees-wrap { min-height: 18rem; overflow: auto; }
+    #employees-table thead { position: sticky; top: 0; z-index: 3; background: var(--tblr-card-bg, #fff); }
+}
+
+/* Левое меню на ПК: раскрывающееся, по умолчанию скрыто. Кнопка-шеврон
+   приклеена к правому краю меню (или к левому краю окна, когда оно скрыто). */
+.sidebar-toggle { display: none; }
+
+@media (min-width: 992px) {
+    .sidebar-toggle {
+        position: fixed;
+        top: 0.75rem;
+        left: calc(15rem - 1px);
+        z-index: 1035;
+        width: 1.75rem;
+        height: 3rem;
+        align-items: center;
+        justify-content: center;
+        padding: 0;
+        border: 1px solid var(--tblr-primary, #206bc4);
+        border-left: 0;
+        border-radius: 0 0.5rem 0.5rem 0;
+        background: var(--tblr-primary, #206bc4);
+        color: #fff;
+        font-size: 1.25rem;
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+        cursor: pointer;
+        transition: left 0.2s ease;
+    }
+
+    .sidebar-toggle:hover { filter: brightness(1.1); }
+
+    .navbar-vertical.navbar-expand-lg { transition: transform 0.2s ease; }
+    .page-wrapper { transition: margin-left 0.2s ease; }
+
+    .sidebar-collapsed .navbar-vertical.navbar-expand-lg { transform: translateX(-100%); }
+    .sidebar-collapsed .navbar-vertical.navbar-expand-lg ~ .page-wrapper { margin-left: 0; padding-left: 1.75rem; }
+    .sidebar-collapsed .sidebar-toggle { left: 0; }
+}
+
+.sidebar-toggle .icon-show { display: none; }
+.sidebar-collapsed .sidebar-toggle .icon-hide { display: none; }
+.sidebar-collapsed .sidebar-toggle .icon-show { display: inline; }
+
+/* ПК: ширины колонок зафиксированы (table-layout: fixed), всё свободное
+   место получает колонка «Документы» (у неё ширины нет). Сумма фиксированных
+   колонок + 17rem под документы = min-width таблицы выше. */
+@media (min-width: 992px) {
+    #employees-table col.c-sel { width: 2.5rem; }
+    #employees-table col.c-name { width: 12rem; }
+    #employees-table col.c-pass { width: 8rem; }
+    #employees-table col.c-irs { width: 6rem; }
+    #employees-table col.c-date { width: 6.5rem; }
+    #employees-table col.c-act { width: 8rem; }
+    #employees-table .documents-cell { min-width: 0; }
+}
+
+@media (max-width: 991.98px) {
+    #employees-table colgroup { display: none; }
+}
+
+@media (min-width: 992px) {
+    @container employees (max-width: 1479px) {
+        #employees-table col.c-date { width: 3.5rem; }
+    }
+}

@@ -7,3 +7,5 @@
 !/uploads/employees/.gitkeep
 /uploads/organizations/*
 !/uploads/organizations/.gitkeep
+
+/_deploy_build/

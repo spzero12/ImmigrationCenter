@@ -21,9 +21,7 @@ if ($method === 'GET') {
     // organization/department — джойн на справочники, с алиасами под старые
     // имена полей (весь остальной код, включая js/employees.js, ждёт именно
     // employee.organization / employee.department как текст).
-    // Сортировка по организации в первую очередь — employees.php группирует
-    // строки по ней; сотрудники без организации идут первой группой
-    // (NULL в MySQL сортируется раньше любого значения).
+    // Сортировка по ФИО; организация выбирается фильтром в шапке таблицы.
     $baseSql = 'SELECT e.*, o.name AS organization, d.name AS department, r.name AS region_name
                 FROM employees e
                 LEFT JOIN regions r ON r.id = e.region_id
@@ -33,12 +31,12 @@ if ($method === 'GET') {
     if ($q !== '') {
         $stmt = $db->prepare(
             $baseSql . ' WHERE e.full_name LIKE ? OR e.citizenship LIKE ? OR e.position LIKE ? OR d.name LIKE ? OR EXISTS (SELECT 1 FROM employee_documents p WHERE p.employee_id = e.id AND p.type = \'passport\' AND p.number LIKE ?)
-                          ORDER BY o.name IS NULL, o.name, e.full_name'
+                          ORDER BY e.full_name'
         );
         $like = "%{$q}%";
         $stmt->execute([$like, $like, $like, $like, $like]);
     } else {
-        $stmt = $db->query($baseSql . ' ORDER BY o.name IS NULL, o.name, e.full_name');
+        $stmt = $db->query($baseSql . ' ORDER BY e.full_name');
     }
 
     $employees = $stmt->fetchAll();

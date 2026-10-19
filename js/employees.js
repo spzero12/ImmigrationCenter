@@ -1,8 +1,10 @@
 $(function () {
     const $tableBody = $('#employees-table tbody');
     const $search = $('#employee-search');
+    const $organization = $('#organization-filter');
+    const $columnFilters = $('.column-filter');
     const $inventoryButton = $('#inventory-button');
-    const COLUMN_COUNT = 11;
+    const COLUMN_COUNT = 12;
 
     // Столбцы со сроками — по эскизу заказчика; тип документа => ключ docs.
     const DATE_COLUMNS = ['passport', 'visa', 'work_permit', 'registration', 'medical_certificate', 'dms'];
@@ -46,18 +48,18 @@ $(function () {
 
     function dateCell(doc, type) {
         if (!doc || !doc.expire_date) {
-            return '<td class="text-nowrap"><span class="indicator indicator-none"></span></td>';
+            return '<td class="text-nowrap" data-label="' + DOC_LABELS[type] + ' до"><span class="indicator indicator-none"></span></td>';
         }
 
         const days = doc.indicator.days;
-        const title = DOC_LABELS[type] + ': ' + (days < 0 ? 'просрочено на ' + (-days) + ' дн.' : 'осталось ' + days + ' дн.');
+        const title = DOC_LABELS[type] + ' до ' + formatDate(doc.expire_date) + ': ' + (days < 0 ? 'просрочено на ' + (-days) + ' дн.' : 'осталось ' + days + ' дн.');
         const flag = doc.indicator.key === 'red' || doc.indicator.key === 'yellow'
             ? '<span class="doc-flag doc-flag-' + doc.indicator.key + '">' + DOC_LABELS[type] + '</span>'
             : '';
 
-        return '<td class="text-nowrap" title="' + title + '">' + flag +
-            '<span class="indicator indicator-' + doc.indicator.key + '"></span> ' +
-            escapeHtml(formatDate(doc.expire_date)) + '</td>';
+        return '<td class="text-nowrap" data-label="' + DOC_LABELS[type] + ' до" title="' + title + '">' + flag +
+            '<span class="indicator indicator-' + doc.indicator.key + '"></span>' +
+            '<span class="doc-date"> ' + escapeHtml(formatDate(doc.expire_date)) + '</span></td>';
     }
 
     // Строка выделяется рамкой по худшему сроку: есть красный — красная,
@@ -85,7 +87,7 @@ $(function () {
     function documentsCell(employee) {
         const base = 'process_document.php?employee_id=' + encodeURIComponent(employee.id) + '&document=';
 
-        return '<td class="documents-cell">' +
+        return '<td class="documents-cell" data-label="Документы">' +
             '<details class="doc-level" open><summary>' + escapeHtml(employee.region_name || 'Без региона') + '</summary>' +
             '<details class="doc-level" open><summary>РНР (1 год)</summary>' +
             '<details class="doc-level" open><summary>Приглашение</summary>' +
@@ -101,7 +103,64 @@ $(function () {
         $('#inventory-count').text(selectedIds.size ? '(' + selectedIds.size + ')' : '');
     }
 
-    function renderRows(employees) {
+    let allEmployees = [];
+
+    function norm(text) {
+        return String(text || '').toLowerCase();
+    }
+
+    // Текст каждого столбца таблицы (ключи совпадают с номерами th) — по нему
+    // работают фильтры под заголовками.
+    function columnTexts(employee) {
+        const docs = employee.docs || {};
+        const texts = {
+            1: employee.full_name + ' ' + (employee.citizenship || ''),
+            2: docs.passport ? docs.passport.number : '',
+            3: employee.irs_number || '',
+        };
+
+        return texts;
+    }
+
+    function matchesFilters(employee) {
+        const org = $organization.val();
+
+        if (org !== '' && (employee.organization || '') !== (org === '__none__' ? '' : org)) {
+            return false;
+        }
+
+        const query = norm($search.val()).trim();
+
+        if (query !== '') {
+            const docs = employee.docs || {};
+            const haystack = norm([
+                employee.full_name, employee.citizenship, employee.position, employee.department, employee.irs_number,
+                docs.passport ? docs.passport.number : '',
+            ].join(' '));
+
+            if (haystack.indexOf(query) === -1) {
+                return false;
+            }
+        }
+
+        const texts = columnTexts(employee);
+        let ok = true;
+
+        $columnFilters.each(function () {
+            const value = norm($(this).val()).trim();
+
+            if (value !== '' && norm(texts[$(this).data('col')]).indexOf(value) === -1) {
+                ok = false;
+                return false;
+            }
+        });
+
+        return ok;
+    }
+
+    function renderRows() {
+        const employees = allEmployees.filter(matchesFilters);
+
         $tableBody.empty();
 
         if (employees.length === 0) {
@@ -109,20 +168,7 @@ $(function () {
             return;
         }
 
-        let lastOrganization = null;
-
         employees.forEach(function (employee) {
-            const organization = employee.organization || '';
-
-            if (organization !== lastOrganization) {
-                lastOrganization = organization;
-                $tableBody.append(
-                    '<tr class="table-group-header"><td colspan="' + COLUMN_COUNT + '"><strong>' +
-                    (organization ? escapeHtml(organization) : 'Без организации') +
-                    '</strong></td></tr>'
-                );
-            }
-
             const docs = employee.docs || {};
             const passport = docs.passport;
             const deleteBtn = CAN_DELETE
@@ -130,12 +176,13 @@ $(function () {
                 : '';
 
             let cells =
-                '<td><input type="checkbox" class="form-check-input select-employee" data-id="' + employee.id + '"' +
+                '<td class="cell-select"><input type="checkbox" class="form-check-input select-employee" data-id="' + employee.id + '"' +
                 (selectedIds.has(employee.id) ? ' checked' : '') + '></td>' +
-                '<td><div class="d-flex align-items-center gap-2">' + avatarHtml(employee) +
+                '<td class="cell-name"><div class="d-flex align-items-center gap-2">' + avatarHtml(employee) +
                 '<a href="employee_form.php?id=' + encodeURIComponent(employee.id) + '">' + escapeHtml(employee.full_name) + '</a></div>' +
                 '<div class="text-secondary small">' + escapeHtml(employee.citizenship) + '</div></td>' +
-                '<td>' + escapeHtml(passport ? passport.number : '') + '</td>';
+                '<td data-label="№ паспорта">' + escapeHtml(passport ? passport.number : '') + '</td>' +
+                '<td data-label="№ ИРС">' + escapeHtml(employee.irs_number) + '</td>';
 
             DATE_COLUMNS.forEach(function (type) {
                 cells += dateCell(docs[type], type);
@@ -149,13 +196,50 @@ $(function () {
         });
     }
 
-    function loadEmployees(query) {
-        $.getJSON('api/employees.php', { q: query || '' }, renderRows);
+    // Список организаций строится из загруженных сотрудников; выбор
+    // сохраняется при перезагрузке (например, после удаления).
+    function fillOrganizations() {
+        const current = $organization.val();
+        const names = [];
+        let hasNone = false;
+
+        allEmployees.forEach(function (employee) {
+            if (!employee.organization) {
+                hasNone = true;
+            } else if (names.indexOf(employee.organization) === -1) {
+                names.push(employee.organization);
+            }
+        });
+
+        names.sort(function (a, b) { return a.localeCompare(b, 'ru'); });
+
+        $organization.empty().append($('<option>').val('').text('Все организации'));
+        names.forEach(function (name) {
+            $organization.append($('<option>').val(name).text(name));
+        });
+
+        if (hasNone) {
+            $organization.append($('<option>').val('__none__').text('Без организации'));
+        }
+
+        $organization.val(current);
+
+        if ($organization.val() === null) {
+            $organization.val('');
+        }
     }
 
-    $search.on('input', function () {
-        loadEmployees($(this).val());
-    });
+    function loadEmployees() {
+        $.getJSON('api/employees.php', { q: '' }, function (employees) {
+            allEmployees = employees;
+            fillOrganizations();
+            renderRows();
+        });
+    }
+
+    $search.on('input', renderRows);
+    $organization.on('change', renderRows);
+    $columnFilters.on('input', renderRows);
 
     $tableBody.on('change', '.select-employee', function () {
         const id = parseInt($(this).data('id'), 10);
@@ -187,9 +271,27 @@ $(function () {
         }).done(function () {
             selectedIds.delete(id);
             updateInventoryButton();
-            loadEmployees($search.val());
+            loadEmployees();
         });
     });
 
-    loadEmployees('');
+
+    // ПК: высота блока таблицы подгоняется под окно, чтобы горизонтальная
+    // полоса прокрутки была у нижнего края экрана, а не под всеми строками.
+    const $wrap = $('.employees-wrap');
+
+    function fitTableHeight() {
+        if (window.innerWidth < 992) {
+            $wrap.css('max-height', '');
+            return;
+        }
+
+        const top = $wrap.offset().top;
+
+        $wrap.css('max-height', Math.max(320, window.innerHeight - top - 24) + 'px');
+    }
+
+    $(window).on('resize', fitTableHeight);
+    fitTableHeight();
+    loadEmployees();
 });

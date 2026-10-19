@@ -14,9 +14,14 @@ require __DIR__ . '/includes/header.php';
 
 <div class="card">
     <div class="card-header">
-        <div class="input-icon w-auto">
-            <span class="input-icon-addon"><i class="ti ti-search"></i></span>
-            <input type="text" id="employee-search" class="form-control" placeholder="Поиск по ФИО, паспорту, должности...">
+        <div class="d-flex flex-wrap gap-2">
+            <select id="organization-filter" class="form-select w-auto" aria-label="Организация">
+                <option value="">Все организации</option>
+            </select>
+            <div class="input-icon w-auto">
+                <span class="input-icon-addon"><i class="ti ti-search"></i></span>
+                <input type="text" id="employee-search" class="form-control" placeholder="Поиск по ФИО, паспорту, должности...">
+            </div>
         </div>
         <div class="card-actions d-flex gap-2">
             <button type="button" class="btn btn-outline-primary" id="inventory-button" disabled>
@@ -29,13 +34,19 @@ require __DIR__ . '/includes/header.php';
             </a>
         </div>
     </div>
-    <div class="table-responsive">
+    <div class="table-responsive employees-wrap">
         <table class="table table-vcenter table-sm card-table" id="employees-table">
+            <colgroup>
+                <col class="c-sel"><col class="c-name"><col class="c-pass"><col class="c-irs">
+                <col class="c-date"><col class="c-date"><col class="c-date"><col class="c-date"><col class="c-date"><col class="c-date">
+                <col class="c-docs"><col class="c-act">
+            </colgroup>
             <thead>
                 <tr>
                     <th class="w-1"></th>
                     <th>ФИО</th>
                     <th>№ паспорта</th>
+                    <th>№ ИРС</th>
                     <th>Паспорт до</th>
                     <th>Виза до</th>
                     <th>РНР до</th>
@@ -45,9 +56,17 @@ require __DIR__ . '/includes/header.php';
                     <th>Документы</th>
                     <th></th>
                 </tr>
+                <tr class="column-filters">
+                    <th></th>
+                    <?php for ($col = 1; $col <= 10; $col++): ?>
+                    <?php /* фильтры только у ФИО, паспорта и ИРС; у сроков (4–9) и «Документов» (10) не нужны */ ?>
+                    <th><?php if ($col <= 3): ?><input type="text" class="form-control form-control-sm column-filter" data-col="<?php echo $col; ?>" placeholder="Фильтр" aria-label="Фильтр по столбцу"><?php endif; ?></th>
+                    <?php endfor; ?>
+                    <th></th>
+                </tr>
             </thead>
             <tbody>
-                <tr><td colspan="11">Загрузка...</td></tr>
+                <tr><td colspan="12">Загрузка...</td></tr>
             </tbody>
         </table>
     </div>

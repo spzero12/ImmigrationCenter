@@ -62,3 +62,24 @@ Word» (`templates/processes/*.html`, `includes/document_sheet.php`) с поля
 
 `admin`, `hr`, `lawyer`, `manager` — хранятся в таблице `users.role`. Удаление
 карточки сотрудника доступно ролям `admin` и `hr`.
+
+## Локальный стенд (для проверки изменений)
+
+Одноразовая настройка не нужна: `scripts/local_dev.ps1` сам создаёт локальную
+MariaDB (порт 3307, данные в `%USERPROFILE%\portal-localdb`, вне репозитория),
+заливает `db/production_rebuild.sql` и демо-данные только при первом запуске, а
+дальше просто поднимает процессы. PHP-сервер — порт 8001 (или `$env:PORT`).
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\local_dev.ps1          # БД + сервер
+powershell -ExecutionPolicy Bypass -File scripts\local_dev.ps1 -DbOnly  # только БД
+powershell -ExecutionPolicy Bypass -File scripts\local_dev.ps1 -Reset   # пересоздать БД
+```
+
+В Claude Code это же запускает конфигурация `php-local` из `.claude/launch.json`.
+Подключение к локальной БД подставляется через `scripts/local/env.php`
+(`PORTAL_DB_*`), боевой `config/config.php` не используется. Вход:
+`hr_demo` / `Demo12345` или `admin` / `admin123`. Новые миграции из
+`db/migrations` на уже созданную локальную БД применяйте вручную
+(`mariadb -uroot -P3307 -h127.0.0.1 portal < db/migrations/NNN_*.sql`)
+или пересоздайте её через `-Reset`.

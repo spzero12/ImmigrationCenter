@@ -18,7 +18,7 @@ const EMPLOYEE_TEXT_FIELDS = [
     'last_name_lat', 'first_name_lat', 'middle_name_lat',
     'birth_country', 'birth_place', 'residence_country',
     'visa_country', 'visa_city', 'foreign_workplace',
-    'position', 'phone', 'email', 'notes',
+    'position', 'irs_number', 'phone', 'email', 'notes',
 ];
 
 const STAY_ADDRESS_FIELDS = [
@@ -132,6 +132,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $errors[] = 'Укажите имя сотрудника';
     }
 
+    if ($employee['irs_number'] !== '' && (!ctype_digit($employee['irs_number']) || strlen($employee['irs_number']) > 18)) {
+        $errors[] = 'Номер ИРС — число (только цифры, до 18 знаков)';
+    }
+
     // Сканы валидируем и сохраняем до записи в БД, чтобы ошибка скана не
     // оставляла карточку наполовину сохранённой.
     $newScans = [];
@@ -164,6 +168,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $employee['birth_country'] ?: null, $employee['birth_place'] ?: null,
             $employee['residence_country'] ?: null, $employee['visa_country'] ?: null, $employee['visa_city'] ?: null,
             $employee['foreign_workplace'] ?: null,
+            $employee['irs_number'] !== '' ? ltrim($employee['irs_number'], '0') ?: '0' : null,
             json_encode(array_filter($stayAddress, static fn($v) => $v !== ''), JSON_UNESCAPED_UNICODE) ?: null,
             $employee['organization_id'], $employee['region_id'], $employee['position'], $employee['department_id'],
             $employee['phone'], $employee['email'], $employee['notes'],
@@ -177,7 +182,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     'UPDATE employees SET full_name = ?, last_name = ?, first_name = ?, middle_name = ?,
                         last_name_lat = ?, first_name_lat = ?, middle_name_lat = ?, gender = ?, citizenship = ?, birth_date = ?,
                         birth_country = ?, birth_place = ?, residence_country = ?, visa_country = ?, visa_city = ?,
-                        foreign_workplace = ?, stay_address = ?, organization_id = ?, region_id = ?, position = ?, department_id = ?,
+                        foreign_workplace = ?, irs_number = ?, stay_address = ?, organization_id = ?, region_id = ?, position = ?, department_id = ?,
                         phone = ?, email = ?, notes = ? WHERE id = ?'
                 );
                 $stmt->execute(array_merge($params, [$employee['id']]));
@@ -188,9 +193,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     'INSERT INTO employees (full_name, last_name, first_name, middle_name,
                         last_name_lat, first_name_lat, middle_name_lat, gender, citizenship, birth_date,
                         birth_country, birth_place, residence_country, visa_country, visa_city,
-                        foreign_workplace, stay_address, organization_id, region_id, position, department_id,
+                        foreign_workplace, irs_number, stay_address, organization_id, region_id, position, department_id,
                         phone, email, notes, created_by)
-                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
                 );
                 $stmt->execute(array_merge($params, [currentUser()['id']]));
                 $employeeId = (int) $db->lastInsertId();
@@ -363,6 +368,12 @@ function e($value): string
                         <div class="col-md-4 mb-3">
                             <label class="form-label">Место работы за рубежом</label>
                             <input type="text" class="form-control" name="foreign_workplace" value="<?php echo e($employee['foreign_workplace']); ?>">
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label">Номер ИРС</label>
+                            <input type="text" class="form-control" name="irs_number" inputmode="numeric" pattern="[0-9]*" maxlength="18" value="<?php echo e($employee['irs_number']); ?>">
                         </div>
                     </div>
                     <div class="row">

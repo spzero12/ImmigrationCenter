@@ -7,23 +7,54 @@ require __DIR__ . '/includes/auth.php';
 require_once __DIR__ . '/includes/organizations.php';
 requireLogin();
 
-const ORGANIZATION_REQUISITE_FIELDS = [
-    'full_name' => 'Полное наименование (с ОПФ)',
-    'inn' => 'ИНН',
-    'ogrn' => 'ОГРН',
-    'kpp' => 'КПП',
-    'egrul_date' => 'Дата внесения записи в ЕГРЮЛ',
-    'legal_address' => 'Юридический (почтовый) адрес',
-    'actual_address' => 'Фактический адрес',
-    'phone' => 'Телефон',
-    'email' => 'Email',
+// Поля карточки по разделам выписки ЕГРЮЛ: поле => [подпись, тип, ширина col-md].
+const ORGANIZATION_FIELD_GROUPS = [
+    'Наименование и регистрация' => [
+        'full_name' => ['Полное наименование (с ОПФ)', 'text', 12],
+        'opf' => ['Организационно-правовая форма', 'text', 4],
+        'status' => ['Статус', 'text', 4],
+        'inn' => ['ИНН', 'text', 4],
+        'ogrn' => ['ОГРН', 'text', 4],
+        'ogrn_date' => ['Дата присвоения ОГРН', 'date', 4],
+        'kpp' => ['КПП', 'text', 4],
+        'registration_date' => ['Дата регистрации', 'date', 4],
+        'egrul_date' => ['Дата внесения записи в ЕГРЮЛ', 'date', 4],
+        'termination_date' => ['Дата прекращения деятельности', 'date', 4],
+        'registration_authority' => ['Регистрирующий орган', 'text', 12],
+        'tax_authority' => ['Налоговый орган', 'text', 8],
+        'tax_registration_date' => ['Дата постановки на учёт в налоговом органе', 'date', 4],
+    ],
+    'Адреса и контакты' => [
+        'legal_address' => ['Юридический (почтовый) адрес', 'text', 12],
+        'actual_address' => ['Фактический адрес', 'text', 12],
+        'phone' => ['Телефон', 'text', 6],
+        'email' => ['Email', 'text', 6],
+    ],
+    'Руководитель и капитал' => [
+        'director_position' => ['Должность руководителя', 'text', 4],
+        'director_name' => ['ФИО руководителя', 'text', 5],
+        'director_inn' => ['ИНН руководителя', 'text', 3],
+        'authorized_capital' => ['Уставный капитал, руб.', 'number', 4],
+        'founders' => ['Учредители (участники)', 'textarea', 12],
+    ],
+    'Виды деятельности и коды' => [
+        'okved_main' => ['Основной вид деятельности (ОКВЭД)', 'text', 12],
+        'okved_additional' => ['Дополнительные виды деятельности', 'textarea', 12],
+        'okpo' => ['ОКПО', 'text', 3],
+        'oktmo' => ['ОКТМО', 'text', 3],
+        'okato' => ['ОКАТО', 'text', 3],
+        'pfr_reg_number' => ['Рег. номер в ПФР', 'text', 3],
+        'fss_reg_number' => ['Рег. номер в ФСС', 'text', 3],
+    ],
 ];
+
+$organizationFields = array_merge(...array_values(ORGANIZATION_FIELD_GROUPS));
 
 $db = getDb();
 
 $organization = ['id' => null, 'name' => ''];
 
-foreach (array_keys(ORGANIZATION_REQUISITE_FIELDS) as $field) {
+foreach (array_keys($organizationFields) as $field) {
     $organization[$field] = '';
 }
 
@@ -117,7 +148,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } else {
         $organization['name'] = trim($_POST['name'] ?? '');
 
-        foreach (array_keys(ORGANIZATION_REQUISITE_FIELDS) as $field) {
+        foreach (array_keys($organizationFields) as $field) {
             $organization[$field] = trim($_POST[$field] ?? '');
         }
 
@@ -132,17 +163,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             } else {
                 $values = [$organization['name']];
 
-                foreach (array_keys(ORGANIZATION_REQUISITE_FIELDS) as $field) {
+                foreach (array_keys($organizationFields) as $field) {
                     $values[] = $organization[$field] !== '' ? $organization[$field] : null;
                 }
 
-                $setClause = 'name = ?, ' . implode(' = ?, ', array_keys(ORGANIZATION_REQUISITE_FIELDS)) . ' = ?';
+                $setClause = 'name = ?, ' . implode(' = ?, ', array_keys($organizationFields)) . ' = ?';
 
                 if ($isEdit) {
                     $db->prepare("UPDATE organizations SET {$setClause} WHERE id = ?")->execute(array_merge($values, [$organization['id']]));
                     header('Location: organization_form.php?id=' . $organization['id'] . '&saved=1');
                 } else {
-                    $columns = 'name, ' . implode(', ', array_keys(ORGANIZATION_REQUISITE_FIELDS));
+                    $columns = 'name, ' . implode(', ', array_keys($organizationFields));
                     $placeholders = implode(', ', array_fill(0, count($values), '?'));
                     $db->prepare("INSERT INTO organizations ({$columns}) VALUES ({$placeholders})")->execute($values);
                     header('Location: organization_form.php?id=' . $db->lastInsertId());
@@ -187,14 +218,22 @@ require __DIR__ . '/includes/header.php';
                         <label class="form-label required">Название (краткое)</label>
                         <input type="text" class="form-control" name="name" value="<?php echo htmlspecialchars($organization['name']); ?>" required>
                     </div>
-                    <div class="row">
-                        <?php foreach (ORGANIZATION_REQUISITE_FIELDS as $field => $label): ?>
-                            <div class="col-md-<?php echo in_array($field, ['full_name', 'legal_address', 'actual_address'], true) ? '12' : '4'; ?> mb-3">
-                                <label class="form-label"><?php echo htmlspecialchars($label); ?></label>
-                                <input type="<?php echo $field === 'egrul_date' ? 'date' : 'text'; ?>" class="form-control" name="<?php echo $field; ?>" value="<?php echo htmlspecialchars((string) ($organization[$field] ?? '')); ?>">
-                            </div>
-                        <?php endforeach; ?>
-                    </div>
+                    <?php foreach (ORGANIZATION_FIELD_GROUPS as $groupTitle => $groupFields): ?>
+                        <h4 class="mt-2 mb-3"><?php echo htmlspecialchars($groupTitle); ?></h4>
+                        <div class="row">
+                            <?php foreach ($groupFields as $field => [$label, $type, $cols]): ?>
+                                <?php $fieldValue = htmlspecialchars((string) ($organization[$field] ?? '')); ?>
+                                <div class="col-md-<?php echo $cols; ?> mb-3">
+                                    <label class="form-label"><?php echo htmlspecialchars($label); ?></label>
+                                    <?php if ($type === 'textarea'): ?>
+                                        <textarea class="form-control" name="<?php echo $field; ?>" rows="3"><?php echo $fieldValue; ?></textarea>
+                                    <?php else: ?>
+                                        <input type="<?php echo $type; ?>"<?php echo $type === 'number' ? ' step="0.01" min="0"' : ''; ?> class="form-control" name="<?php echo $field; ?>" value="<?php echo $fieldValue; ?>">
+                                    <?php endif; ?>
+                                </div>
+                            <?php endforeach; ?>
+                        </div>
+                    <?php endforeach; ?>
 
                     <div class="form-footer">
                         <a href="organizations.php" class="btn btn-link">К списку</a>

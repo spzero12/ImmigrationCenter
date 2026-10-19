@@ -1,0 +1,22 @@
+-- Остальные сведения из выписки ЕГРЮЛ в карточке организации.
+ALTER TABLE organizations
+    ADD COLUMN status VARCHAR(100) NULL COMMENT 'Статус юрлица (действует, ликвидируется и т.п.)',
+    ADD COLUMN opf VARCHAR(150) NULL COMMENT 'Организационно-правовая форма',
+    ADD COLUMN ogrn_date DATE NULL COMMENT 'Дата присвоения ОГРН',
+    ADD COLUMN registration_date DATE NULL COMMENT 'Дата регистрации',
+    ADD COLUMN registration_authority VARCHAR(255) NULL COMMENT 'Регистрирующий орган',
+    ADD COLUMN tax_authority VARCHAR(255) NULL COMMENT 'Налоговый орган',
+    ADD COLUMN tax_registration_date DATE NULL COMMENT 'Дата постановки на учёт в налоговом органе',
+    ADD COLUMN director_position VARCHAR(150) NULL COMMENT 'Должность руководителя',
+    ADD COLUMN director_name VARCHAR(255) NULL COMMENT 'ФИО руководителя',
+    ADD COLUMN director_inn VARCHAR(12) NULL COMMENT 'ИНН руководителя',
+    ADD COLUMN authorized_capital DECIMAL(15, 2) NULL COMMENT 'Размер уставного капитала, руб.',
+    ADD COLUMN okved_main VARCHAR(255) NULL COMMENT 'Основной вид деятельности (ОКВЭД)',
+    ADD COLUMN okved_additional TEXT NULL COMMENT 'Дополнительные виды деятельности',
+    ADD COLUMN okpo VARCHAR(14) NULL,
+    ADD COLUMN oktmo VARCHAR(11) NULL,
+    ADD COLUMN okato VARCHAR(11) NULL,
+    ADD COLUMN pfr_reg_number VARCHAR(30) NULL COMMENT 'Регистрационный номер в ПФР',
+    ADD COLUMN fss_reg_number VARCHAR(30) NULL COMMENT 'Регистрационный номер в ФСС',
+    ADD COLUMN founders TEXT NULL COMMENT 'Учредители (участники)',
+    ADD COLUMN termination_date DATE NULL COMMENT 'Дата прекращения деятельности';

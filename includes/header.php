@@ -9,6 +9,7 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.46.0/dist/tabler-icons.min.css">
     <link rel="stylesheet" href="css/tokens.css?v=<?php echo filemtime(__DIR__ . '/../css/tokens.css'); ?>">
     <link rel="stylesheet" href="css/style.css?v=<?php echo filemtime(__DIR__ . '/../css/style.css'); ?>">
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
     <script>
         // Боковое меню на ПК по умолчанию скрыто; выбор пользователя хранится в localStorage.
         (function () {

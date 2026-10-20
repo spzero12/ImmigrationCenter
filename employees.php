@@ -21,6 +21,14 @@ require __DIR__ . '/includes/header.php';
             <select id="work-site-filter" class="form-select w-auto" aria-label="Объект">
                 <option value="">Все объекты</option>
             </select>
+            <div class="btn-group" role="group" aria-label="Быстрые фильтры по срокам">
+                <button type="button" class="btn btn-outline-danger quick-filter" data-key="red" aria-pressed="false">
+                    <span class="indicator indicator-red"></span> Красные <span class="quick-count badge bg-danger-lt ms-1"></span>
+                </button>
+                <button type="button" class="btn btn-outline-warning quick-filter" data-key="yellow" aria-pressed="false">
+                    <span class="indicator indicator-yellow"></span> Жёлтые <span class="quick-count badge bg-warning-lt ms-1"></span>
+                </button>
+            </div>
             <div class="input-icon w-auto">
                 <span class="input-icon-addon"><i class="ti ti-search"></i></span>
                 <input type="text" id="employee-search" class="form-control" placeholder="Поиск по ФИО, паспорту, должности...">

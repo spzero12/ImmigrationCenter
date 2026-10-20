@@ -123,8 +123,38 @@ $(function () {
         return texts;
     }
 
+    // Быстрые кнопки «Красные» / «Жёлтые»: строки, где есть значок такого
+    // цвета в любом из сроков. Включены обе — строки с красным ИЛИ жёлтым.
+    const $quickFilters = $('.quick-filter');
+
+    function hasIndicator(employee, key) {
+        const docs = employee.docs || {};
+
+        return DATE_COLUMNS.some(function (type) {
+            return docs[type] && docs[type].expire_date && docs[type].indicator.key === key;
+        });
+    }
+
+    function matchesQuickFilters(employee) {
+        const active = $quickFilters.filter('.active').map(function () { return $(this).data('key'); }).get();
+
+        return active.length === 0 || active.some(function (key) { return hasIndicator(employee, key); });
+    }
+
+    function updateQuickCounts() {
+        $quickFilters.each(function () {
+            const key = $(this).data('key');
+
+            $(this).find('.quick-count').text(allEmployees.filter(function (employee) { return hasIndicator(employee, key); }).length);
+        });
+    }
+
     function matchesFilters(employee) {
         const org = $organization.val();
+
+        if (!matchesQuickFilters(employee)) {
+            return false;
+        }
 
         const site = $workSite.val();
 
@@ -242,6 +272,7 @@ $(function () {
             allEmployees = employees;
             fillSelect($organization, 'organization', 'Все организации', 'Без организации');
             fillSelect($workSite, 'work_site', 'Все объекты', 'Без объекта');
+            updateQuickCounts();
             renderRows();
         });
     }
@@ -249,6 +280,10 @@ $(function () {
     $search.on('input', renderRows);
     $organization.on('change', renderRows);
     $workSite.on('change', renderRows);
+    $quickFilters.on('click', function () {
+        $(this).toggleClass('active').attr('aria-pressed', $(this).hasClass('active'));
+        renderRows();
+    });
     $columnFilters.on('input', renderRows);
 
     $tableBody.on('change', '.select-employee', function () {

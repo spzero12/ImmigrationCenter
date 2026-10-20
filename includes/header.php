@@ -48,6 +48,12 @@
                             <span class="nav-link-icon"><i class="ti ti-map-pin"></i></span>
                             <span class="nav-link-title">Регионы</span>
                         </a>
+                    <li class="nav-item">
+                        <a class="nav-link" href="work_sites.php">
+                            <span class="nav-link-icon"><i class="ti ti-building-factory-2"></i></span>
+                            <span class="nav-link-title">Объекты</span>
+                        </a>
+                    </li>
                     </li>
                     <li class="nav-item">
                         <a class="nav-link" href="reports.php">

@@ -22,19 +22,20 @@ if ($method === 'GET') {
     // имена полей (весь остальной код, включая js/employees.js, ждёт именно
     // employee.organization / employee.department как текст).
     // Сортировка по ФИО; организация выбирается фильтром в шапке таблицы.
-    $baseSql = 'SELECT e.*, o.name AS organization, d.name AS department, r.name AS region_name
+    $baseSql = 'SELECT e.*, o.name AS organization, d.name AS department, r.name AS region_name, w.name AS work_site
                 FROM employees e
                 LEFT JOIN regions r ON r.id = e.region_id
                 LEFT JOIN organizations o ON o.id = e.organization_id
-                LEFT JOIN departments d ON d.id = e.department_id';
+                LEFT JOIN departments d ON d.id = e.department_id
+                LEFT JOIN work_sites w ON w.id = e.work_site_id';
 
     if ($q !== '') {
         $stmt = $db->prepare(
-            $baseSql . ' WHERE e.full_name LIKE ? OR e.citizenship LIKE ? OR e.position LIKE ? OR d.name LIKE ? OR EXISTS (SELECT 1 FROM employee_documents p WHERE p.employee_id = e.id AND p.type = \'passport\' AND p.number LIKE ?)
+            $baseSql . ' WHERE e.full_name LIKE ? OR e.citizenship LIKE ? OR e.position LIKE ? OR d.name LIKE ? OR w.name LIKE ? OR EXISTS (SELECT 1 FROM employee_documents p WHERE p.employee_id = e.id AND p.type = \'passport\' AND p.number LIKE ?)
                           ORDER BY e.full_name'
         );
         $like = "%{$q}%";
-        $stmt->execute([$like, $like, $like, $like, $like]);
+        $stmt->execute([$like, $like, $like, $like, $like, $like]);
     } else {
         $stmt = $db->query($baseSql . ' ORDER BY e.full_name');
     }

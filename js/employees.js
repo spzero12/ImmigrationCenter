@@ -2,9 +2,10 @@ $(function () {
     const $tableBody = $('#employees-table tbody');
     const $search = $('#employee-search');
     const $organization = $('#organization-filter');
+    const $workSite = $('#work-site-filter');
     const $columnFilters = $('.column-filter');
     const $inventoryButton = $('#inventory-button');
-    const COLUMN_COUNT = 12;
+    const COLUMN_COUNT = 13;
 
     // Столбцы со сроками — по эскизу заказчика; тип документа => ключ docs.
     const DATE_COLUMNS = ['passport', 'visa', 'work_permit', 'registration', 'medical_certificate', 'dms'];
@@ -125,7 +126,13 @@ $(function () {
     function matchesFilters(employee) {
         const org = $organization.val();
 
+        const site = $workSite.val();
+
         if (org !== '' && (employee.organization || '') !== (org === '__none__' ? '' : org)) {
+            return false;
+        }
+
+        if (site !== '' && (employee.work_site || '') !== (site === '__none__' ? '' : site)) {
             return false;
         }
 
@@ -134,7 +141,7 @@ $(function () {
         if (query !== '') {
             const docs = employee.docs || {};
             const haystack = norm([
-                employee.full_name, employee.citizenship, employee.position, employee.department, employee.irs_number,
+                employee.full_name, employee.citizenship, employee.position, employee.department, employee.irs_number, employee.work_site,
                 docs.passport ? docs.passport.number : '',
             ].join(' '));
 
@@ -182,7 +189,8 @@ $(function () {
                 '<a href="employee_form.php?id=' + encodeURIComponent(employee.id) + '">' + escapeHtml(employee.full_name) + '</a></div>' +
                 '<div class="text-secondary small">' + escapeHtml(employee.citizenship) + '</div></td>' +
                 '<td data-label="№ паспорта">' + escapeHtml(passport ? passport.number : '') + '</td>' +
-                '<td data-label="№ ИРС">' + escapeHtml(employee.irs_number) + '</td>';
+                '<td data-label="№ ИРС">' + escapeHtml(employee.irs_number) + '</td>' +
+                '<td data-label="Объект" class="cell-site">' + escapeHtml(employee.work_site) + '</td>';
 
             DATE_COLUMNS.forEach(function (type) {
                 cells += dateCell(docs[type], type);
@@ -196,49 +204,51 @@ $(function () {
         });
     }
 
-    // Список организаций строится из загруженных сотрудников; выбор
-    // сохраняется при перезагрузке (например, после удаления).
-    function fillOrganizations() {
-        const current = $organization.val();
+    // Списки организаций и объектов строятся из загруженных сотрудников;
+    // выбор сохраняется при перезагрузке (например, после удаления).
+    function fillSelect($select, field, allLabel, noneLabel) {
+        const current = $select.val();
         const names = [];
         let hasNone = false;
 
         allEmployees.forEach(function (employee) {
-            if (!employee.organization) {
+            if (!employee[field]) {
                 hasNone = true;
-            } else if (names.indexOf(employee.organization) === -1) {
-                names.push(employee.organization);
+            } else if (names.indexOf(employee[field]) === -1) {
+                names.push(employee[field]);
             }
         });
 
         names.sort(function (a, b) { return a.localeCompare(b, 'ru'); });
 
-        $organization.empty().append($('<option>').val('').text('Все организации'));
+        $select.empty().append($('<option>').val('').text(allLabel));
         names.forEach(function (name) {
-            $organization.append($('<option>').val(name).text(name));
+            $select.append($('<option>').val(name).text(name));
         });
 
         if (hasNone) {
-            $organization.append($('<option>').val('__none__').text('Без организации'));
+            $select.append($('<option>').val('__none__').text(noneLabel));
         }
 
-        $organization.val(current);
+        $select.val(current);
 
-        if ($organization.val() === null) {
-            $organization.val('');
+        if ($select.val() === null) {
+            $select.val('');
         }
     }
 
     function loadEmployees() {
         $.getJSON('api/employees.php', { q: '' }, function (employees) {
             allEmployees = employees;
-            fillOrganizations();
+            fillSelect($organization, 'organization', 'Все организации', 'Без организации');
+            fillSelect($workSite, 'work_site', 'Все объекты', 'Без объекта');
             renderRows();
         });
     }
 
     $search.on('input', renderRows);
     $organization.on('change', renderRows);
+    $workSite.on('change', renderRows);
     $columnFilters.on('input', renderRows);
 
     $tableBody.on('change', '.select-employee', function () {

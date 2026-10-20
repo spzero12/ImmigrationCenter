@@ -9,6 +9,7 @@ require_once __DIR__ . '/includes/documents.php';
 require_once __DIR__ . '/includes/audit.php';
 require_once __DIR__ . '/includes/organizations.php';
 require_once __DIR__ . '/includes/regions.php';
+require_once __DIR__ . '/includes/work_sites.php';
 require_once __DIR__ . '/includes/scans.php';
 require_once __DIR__ . '/includes/processes.php';
 requireLogin();
@@ -33,7 +34,7 @@ const STAY_ADDRESS_FIELDS = [
     'phone' => 'Телефон по месту пребывания',
 ];
 
-$employee = ['id' => null, 'organization_id' => null, 'department_id' => null, 'region_id' => null, 'birth_date' => '', 'gender' => ''];
+$employee = ['id' => null, 'organization_id' => null, 'department_id' => null, 'region_id' => null, 'work_site_id' => null, 'birth_date' => '', 'gender' => ''];
 
 foreach (EMPLOYEE_TEXT_FIELDS as $field) {
     $employee[$field] = '';
@@ -86,6 +87,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $employee['organization_id'] = (int) ($_POST['organization_id'] ?? 0) ?: null;
     $employee['department_id'] = (int) ($_POST['department_id'] ?? 0) ?: null;
     $employee['region_id'] = (int) ($_POST['region_id'] ?? 0) ?: null;
+    $employee['work_site_id'] = (int) ($_POST['work_site_id'] ?? 0) ?: null;
 
     foreach (STAY_ADDRESS_FIELDS as $key => $label) {
         $stayAddress[$key] = trim($_POST['stay_address'][$key] ?? '');
@@ -170,7 +172,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $employee['foreign_workplace'] ?: null,
             $employee['irs_number'] !== '' ? ltrim($employee['irs_number'], '0') ?: '0' : null,
             json_encode(array_filter($stayAddress, static fn($v) => $v !== ''), JSON_UNESCAPED_UNICODE) ?: null,
-            $employee['organization_id'], $employee['region_id'], $employee['position'], $employee['department_id'],
+            $employee['organization_id'], $employee['region_id'], $employee['work_site_id'], $employee['position'], $employee['department_id'],
             $employee['phone'], $employee['email'], $employee['notes'],
         ];
 
@@ -182,7 +184,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     'UPDATE employees SET full_name = ?, last_name = ?, first_name = ?, middle_name = ?,
                         last_name_lat = ?, first_name_lat = ?, middle_name_lat = ?, gender = ?, citizenship = ?, birth_date = ?,
                         birth_country = ?, birth_place = ?, residence_country = ?, visa_country = ?, visa_city = ?,
-                        foreign_workplace = ?, irs_number = ?, stay_address = ?, organization_id = ?, region_id = ?, position = ?, department_id = ?,
+                        foreign_workplace = ?, irs_number = ?, stay_address = ?, organization_id = ?, region_id = ?, work_site_id = ?, position = ?, department_id = ?,
                         phone = ?, email = ?, notes = ? WHERE id = ?'
                 );
                 $stmt->execute(array_merge($params, [$employee['id']]));
@@ -193,9 +195,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     'INSERT INTO employees (full_name, last_name, first_name, middle_name,
                         last_name_lat, first_name_lat, middle_name_lat, gender, citizenship, birth_date,
                         birth_country, birth_place, residence_country, visa_country, visa_city,
-                        foreign_workplace, irs_number, stay_address, organization_id, region_id, position, department_id,
+                        foreign_workplace, irs_number, stay_address, organization_id, region_id, work_site_id, position, department_id,
                         phone, email, notes, created_by)
-                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
                 );
                 $stmt->execute(array_merge($params, [currentUser()['id']]));
                 $employeeId = (int) $db->lastInsertId();
@@ -272,6 +274,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 $organizations = getOrganizations($db);
 $allDepartments = getDepartments($db);
 $regions = getRegions($db);
+$workSites = getWorkSites($db);
 
 $pageTitle = $isEdit ? 'Карточка сотрудника' : 'Новый сотрудник';
 require __DIR__ . '/includes/header.php';
@@ -412,6 +415,16 @@ function e($value): string
                                 <?php endforeach; ?>
                             </select>
                             <div class="form-hint"><a href="regions.php">Регионы</a></div>
+                        </div>
+                        <div class="col-md-3 mb-3">
+                            <label class="form-label">Объект</label>
+                            <select class="form-select" name="work_site_id">
+                                <option value="">— не указан —</option>
+                                <?php foreach ($workSites as $site): ?>
+                                    <option value="<?php echo (int) $site['id']; ?>" <?php echo (int) $employee['work_site_id'] === (int) $site['id'] ? 'selected' : ''; ?>><?php echo e($site['name']); ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                            <div class="form-hint"><a href="work_sites.php">Объекты</a></div>
                         </div>
                         <div class="col-md-3 mb-3">
                             <label class="form-label">Должность</label>

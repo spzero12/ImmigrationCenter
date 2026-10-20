@@ -180,7 +180,7 @@
    .table-responsive появляется горизонтальная прокрутка (только если
    таблица не помещается). */
 @media (min-width: 992px) {
-    #employees-table { table-layout: fixed; width: 100%; min-width: 92.5rem; }
+    #employees-table { table-layout: fixed; width: 100%; min-width: 102.5rem; }
 }
 
 /* ПК: если таблица не помещается в полную ширину (1500px) — в ячейках сроков
@@ -189,8 +189,8 @@
 .employees-wrap { container: employees / inline-size; }
 
 @media (min-width: 992px) {
-    @container employees (max-width: 1479px) {
-        #employees-table { min-width: 74.5rem; }
+    @container employees (max-width: 1639px) {
+        #employees-table { min-width: 90.5rem; }
         #employees-table .doc-date { display: none; }
     }
 }
@@ -251,6 +251,7 @@
     #employees-table col.c-name { width: 12rem; }
     #employees-table col.c-pass { width: 8rem; }
     #employees-table col.c-irs { width: 6rem; }
+    #employees-table col.c-site { width: 10rem; }
     #employees-table col.c-date { width: 6.5rem; }
     #employees-table col.c-act { width: 8rem; }
     #employees-table .documents-cell { min-width: 0; }
@@ -261,7 +262,13 @@
 }
 
 @media (min-width: 992px) {
-    @container employees (max-width: 1479px) {
-        #employees-table col.c-date { width: 3.5rem; }
+    @container employees (max-width: 1639px) {
+        #employees-table col.c-date { width: 4.5rem; }
+        #employees-table thead th { padding-left: 0.25rem; padding-right: 0.25rem; font-size: 0.6rem; letter-spacing: 0; }
     }
+}
+
+/* Заголовки колонок не наезжают друг на друга: длинные слова переносятся. */
+@media (min-width: 992px) {
+    #employees-table thead th { white-space: normal; overflow-wrap: anywhere; }
 }

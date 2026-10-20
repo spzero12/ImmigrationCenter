@@ -230,4 +230,33 @@ foreach ($employees as $entry) {
     echo "  {$fullName} — добавлен (id={$employeeId}), документов: " . count($entry['docs']) . "\n";
 }
 
+
+echo "\n=== Демо-объекты ===\n";
+
+$demoSites = [
+    ['ЖК «Северный парк»', 'Строительство жилого комплекса, корпуса 1–3', 'г. Москва, ул. Лесная, д. 10'],
+    ['Склад «Подольск»', 'Логистический комплекс, погрузочно-разгрузочные работы', 'Московская область, г. Подольск, Промышленная ул., д. 5'],
+];
+$siteIds = [];
+
+foreach ($demoSites as [$siteName, $siteDescription, $siteAddress]) {
+    $existing = $db->prepare('SELECT id FROM work_sites WHERE name = ?');
+    $existing->execute([$siteName]);
+    $siteId = $existing->fetchColumn();
+
+    if (!$siteId) {
+        $db->prepare('INSERT INTO work_sites (name, description, address) VALUES (?, ?, ?)')->execute([$siteName, $siteDescription, $siteAddress]);
+        $siteId = $db->lastInsertId();
+    }
+
+    $siteIds[] = (int) $siteId;
+    echo "  {$siteName}\n";
+}
+
+// Сотрудникам без объекта — по кругу демо-объекты.
+$withoutSite = $db->query('SELECT id FROM employees WHERE work_site_id IS NULL ORDER BY id')->fetchAll(PDO::FETCH_COLUMN);
+
+foreach ($withoutSite as $index => $employeeId) {
+    $db->prepare('UPDATE employees SET work_site_id = ? WHERE id = ?')->execute([$siteIds[$index % count($siteIds)], $employeeId]);
+}
 echo "\nГотово.\n";

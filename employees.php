@@ -18,6 +18,9 @@ require __DIR__ . '/includes/header.php';
             <select id="organization-filter" class="form-select w-auto" aria-label="Организация">
                 <option value="">Все организации</option>
             </select>
+            <select id="work-site-filter" class="form-select w-auto" aria-label="Объект">
+                <option value="">Все объекты</option>
+            </select>
             <div class="input-icon w-auto">
                 <span class="input-icon-addon"><i class="ti ti-search"></i></span>
                 <input type="text" id="employee-search" class="form-control" placeholder="Поиск по ФИО, паспорту, должности...">
@@ -37,7 +40,7 @@ require __DIR__ . '/includes/header.php';
     <div class="table-responsive employees-wrap">
         <table class="table table-vcenter table-sm card-table" id="employees-table">
             <colgroup>
-                <col class="c-sel"><col class="c-name"><col class="c-pass"><col class="c-irs">
+                <col class="c-sel"><col class="c-name"><col class="c-pass"><col class="c-irs"><col class="c-site">
                 <col class="c-date"><col class="c-date"><col class="c-date"><col class="c-date"><col class="c-date"><col class="c-date">
                 <col class="c-docs"><col class="c-act">
             </colgroup>
@@ -47,6 +50,7 @@ require __DIR__ . '/includes/header.php';
                     <th>ФИО</th>
                     <th>№ паспорта</th>
                     <th>№ ИРС</th>
+                    <th>Объект</th>
                     <th>Паспорт до</th>
                     <th>Виза до</th>
                     <th>РНР до</th>
@@ -58,15 +62,15 @@ require __DIR__ . '/includes/header.php';
                 </tr>
                 <tr class="column-filters">
                     <th></th>
-                    <?php for ($col = 1; $col <= 10; $col++): ?>
-                    <?php /* фильтры только у ФИО, паспорта и ИРС; у сроков (4–9) и «Документов» (10) не нужны */ ?>
+                    <?php for ($col = 1; $col <= 11; $col++): ?>
+                    <?php /* фильтры только у ФИО, паспорта и ИРС; у сроков (5–10) и «Документов» (11) не нужны */ ?>
                     <th><?php if ($col <= 3): ?><input type="text" class="form-control form-control-sm column-filter" data-col="<?php echo $col; ?>" placeholder="Фильтр" aria-label="Фильтр по столбцу"><?php endif; ?></th>
                     <?php endfor; ?>
                     <th></th>
                 </tr>
             </thead>
             <tbody>
-                <tr><td colspan="12">Загрузка...</td></tr>
+                <tr><td colspan="13">Загрузка...</td></tr>
             </tbody>
         </table>
     </div>

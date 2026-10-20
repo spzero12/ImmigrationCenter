@@ -26,6 +26,7 @@ DROP TABLE IF EXISTS organization_signers;
 DROP TABLE IF EXISTS employee_documents;
 DROP TABLE IF EXISTS employees;
 DROP TABLE IF EXISTS departments;
+DROP TABLE IF EXISTS work_sites;
 DROP TABLE IF EXISTS organizations;
 DROP TABLE IF EXISTS regions;
 DROP TABLE IF EXISTS audit_log;
@@ -125,6 +126,19 @@ CREATE TABLE organization_signers (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ----------------------------------------------------------------------------
+-- work_sites — объекты, на которых работают сотрудники.
+-- ----------------------------------------------------------------------------
+CREATE TABLE work_sites (
+    id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    description TEXT NULL,
+    address VARCHAR(500) NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY uniq_work_sites_name (name)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ----------------------------------------------------------------------------
 -- employees — единая карточка иностранного сотрудника (организационные и
 -- личные данные; ФИО раздельно, паспортные данные и фото — не здесь, см.
 -- employee_documents/фото ниже).
@@ -163,10 +177,12 @@ CREATE TABLE employees (
     photo_original_name VARCHAR(255) NULL,
     photo_mime_type VARCHAR(100) NULL,
     photo_size INT UNSIGNED NULL,
+    work_site_id INT UNSIGNED NULL,
     CONSTRAINT fk_employees_created_by FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL,
     CONSTRAINT fk_employees_organization FOREIGN KEY (organization_id) REFERENCES organizations(id) ON DELETE SET NULL,
     CONSTRAINT fk_employees_department FOREIGN KEY (department_id) REFERENCES departments(id) ON DELETE SET NULL,
-    CONSTRAINT fk_employees_region FOREIGN KEY (region_id) REFERENCES regions(id) ON DELETE SET NULL
+    CONSTRAINT fk_employees_region FOREIGN KEY (region_id) REFERENCES regions(id) ON DELETE SET NULL,
+    CONSTRAINT fk_employees_work_site FOREIGN KEY (work_site_id) REFERENCES work_sites(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ----------------------------------------------------------------------------

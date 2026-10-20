@@ -42,7 +42,7 @@ powershell -ExecutionPolicy Bypass -File scripts\build_deploy.ps1
 1. Если в базе есть данные — вкладка **Экспорт** → «Быстрый» → SQL → сохранить
    бэкап локально.
 2. Вкладка **Импорт** → файл `db/production_rebuild.sql` → кодировка `utf-8` →
-   «Вперёд». Файл уже содержит все миграции до 018, регион «Москва» и админа.
+   «Вперёд». Файл уже содержит все миграции до 019 (в т.ч. объекты — `work_sites`), регион «Москва» и админа.
 3. Проверка: в списке 10 таблиц — `users`, `organizations`, `departments`,
    `regions`, `organization_signers`, `employees`, `employee_documents`,
    `employee_processes`, `process_documents`, `audit_log`; в `users` одна

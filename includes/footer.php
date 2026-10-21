@@ -2,11 +2,10 @@
         </div>
     </div>
 </div>
-    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@tabler/core@1.4.0/dist/js/tabler.min.js"></script>
-    <script src="js/main.js"></script>
+    <script src="js/main.js?v=<?php echo filemtime(__DIR__ . '/../js/main.js'); ?>"></script>
     <?php foreach ($extraScripts ?? [] as $src): ?>
-    <script src="<?php echo htmlspecialchars($src); ?>"></script>
+    <script src="<?php echo htmlspecialchars($src); ?>?v=<?php echo (int) @filemtime(__DIR__ . '/../' . $src); ?>"></script>
     <?php endforeach; ?>
 </body>
 </html>

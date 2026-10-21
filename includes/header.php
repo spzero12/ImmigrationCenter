@@ -7,8 +7,17 @@
     <title><?php echo isset($pageTitle) ? htmlspecialchars($pageTitle) . ' — Миграционный портал' : 'Миграционный портал'; ?></title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/core@1.4.0/dist/css/tabler.min.css">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.46.0/dist/tabler-icons.min.css">
-    <link rel="stylesheet" href="css/tokens.css">
-    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/tokens.css?v=<?php echo filemtime(__DIR__ . '/../css/tokens.css'); ?>">
+    <link rel="stylesheet" href="css/style.css?v=<?php echo filemtime(__DIR__ . '/../css/style.css'); ?>">
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    <script>
+        // Боковое меню на ПК по умолчанию скрыто; выбор пользователя хранится в localStorage.
+        (function () {
+            var open = false;
+            try { open = localStorage.getItem('sidebarOpen') === '1'; } catch (e) {}
+            if (!open) { document.documentElement.classList.add('sidebar-collapsed'); }
+        })();
+    </script>
 </head>
 <body>
 <div class="page">
@@ -36,10 +45,16 @@
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="documents.php">
-                            <span class="nav-link-icon"><i class="ti ti-file-text"></i></span>
-                            <span class="nav-link-title">Документы</span>
+                        <a class="nav-link" href="regions.php">
+                            <span class="nav-link-icon"><i class="ti ti-map-pin"></i></span>
+                            <span class="nav-link-title">Регионы</span>
                         </a>
+                    <li class="nav-item">
+                        <a class="nav-link" href="work_sites.php">
+                            <span class="nav-link-icon"><i class="ti ti-building-factory-2"></i></span>
+                            <span class="nav-link-title">Объекты</span>
+                        </a>
+                    </li>
                     </li>
                     <li class="nav-item">
                         <a class="nav-link" href="reports.php">
@@ -79,7 +94,10 @@
             </div>
         </div>
     </aside>
+    <button type="button" id="sidebar-toggle" class="sidebar-toggle d-none d-lg-flex" aria-label="Показать или скрыть меню" title="Меню">
+        <i class="ti ti-chevrons-left icon-hide"></i><i class="ti ti-chevrons-right icon-show"></i>
+    </button>
     <?php endif; ?>
     <div class="page-wrapper">
         <div class="page-body">
-            <div class="container-xl">
+            <div class="container-fluid">

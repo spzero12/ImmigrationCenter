@@ -29,3 +29,270 @@
 .extra-field-pair .extra-field-label {
     color: var(--tblr-secondary, #6b7280);
 }
+
+/* Светофор сроков документов в таблице сотрудников (employees.php). */
+.indicator {
+    display: inline-block;
+    width: 0.75rem;
+    height: 0.75rem;
+    border-radius: 50%;
+    vertical-align: middle;
+    background: #cbd5e1;
+}
+
+.indicator-red { background: #d63939; }
+.indicator-yellow { background: #f5c211; }
+.indicator-green { background: #2fb344; }
+.indicator-none { background: #cbd5e1; }
+
+/* Ячейка "Документы": дерево регион → РНР → процесс → документы, раскрытое
+   сразу, в строгом офисном оформлении — тонкие разделители уровней (как на
+   эскизе заказчика), шевроны, значки Word. */
+.documents-cell { min-width: 17rem; font-size: 0.85rem; }
+
+.documents-cell .doc-level { border-top: 1px solid var(--tblr-border-color, #e6e7e9); }
+.documents-cell > .doc-level { border-top: 0; }
+.documents-cell .doc-level .doc-level { margin-left: 0.9rem; }
+
+.documents-cell summary {
+    display: flex;
+    align-items: center;
+    padding: 0.25rem 0;
+    cursor: pointer;
+    list-style: none;
+    font-weight: 600;
+    color: var(--tblr-body-color, #1f2937);
+    white-space: nowrap;
+}
+
+.documents-cell summary::-webkit-details-marker { display: none; }
+
+.documents-cell summary::before {
+    content: '';
+    width: 0.4rem;
+    height: 0.4rem;
+    border-right: 2px solid currentColor;
+    border-bottom: 2px solid currentColor;
+    transform: rotate(45deg);
+    margin: 0 0.5rem 0.2rem 0.1rem;
+    opacity: 0.55;
+}
+
+.documents-cell details:not([open]) > summary::before { transform: rotate(-45deg); margin-bottom: 0; }
+.documents-cell summary:hover { color: var(--tblr-primary, #206bc4); }
+
+.documents-cell .doc-list { margin: 0 0 0.25rem 1.1rem; padding: 0; list-style: none; }
+.documents-cell .doc-list li { display: flex; align-items: baseline; gap: 0.4rem; padding: 0.15rem 0; white-space: nowrap; }
+.documents-cell .doc-icon { color: #2b579a; margin-right: 0.3rem; vertical-align: -2px; }
+.documents-cell .doc-format { color: var(--tblr-secondary, #6b7280); font-size: 0.75rem; }
+.documents-cell .doc-format::before { content: '('; }
+.documents-cell .doc-format::after { content: ')'; }
+.documents-cell .doc-soon { color: var(--tblr-secondary, #6b7280); }
+.documents-cell .doc-soon .doc-icon { color: inherit; opacity: 0.5; }
+
+/* Страница документа процесса (process_document.php): «лист Word» в iframe
+   с редактируемыми полями; сам лист стилизует includes/document_sheet.php. */
+.sheet-scroll { overflow-x: auto; }
+.sheet-frame { display: block; width: 100%; min-width: 830px; min-height: 70vh; border: 1px solid var(--tblr-border-color, #dfe3e8); border-radius: 4px; background: #dfe3e8; }
+.sheet-toolbar { position: sticky; top: 0; z-index: 5; }
+.sheet-legend .legend-name { color: #d63939; font-weight: 600; font-size: 0.75rem; }
+.sheet-legend .legend-changed { background: #fff3cd; padding: 0 0.25rem; border-radius: 2px; }
+
+/* Таблица сотрудников: подпись типа документа у жёлтых/красных сроков и
+   рамка строки по худшему сроку (красная — есть красный, оранжевая — жёлтый). */
+.doc-flag {
+    display: block;
+    font-size: 0.65rem;
+    font-weight: 600;
+    line-height: 1;
+    margin-bottom: 2px;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+}
+
+.doc-flag-red { color: #d63939; }
+.doc-flag-yellow { color: #d97706; }
+
+#employees-table tr.row-alert-red > td,
+#employees-table tr.row-alert-yellow > td {
+    border-top-width: 2px !important;
+    border-bottom-width: 2px !important;
+    border-style: solid !important;
+    border-left-width: 0 !important;
+    border-right-width: 0 !important;
+}
+
+#employees-table tr.row-alert-red > td { border-color: #d63939 !important; background: rgba(214, 57, 57, 0.04); }
+#employees-table tr.row-alert-yellow > td { border-color: #f59f00 !important; background: rgba(245, 159, 0, 0.05); }
+
+#employees-table tr.row-alert-red > td:first-child,
+#employees-table tr.row-alert-yellow > td:first-child { border-left-width: 2px !important; }
+
+#employees-table tr.row-alert-red > td:last-child,
+#employees-table tr.row-alert-yellow > td:last-child { border-right-width: 2px !important; }
+/* Мобильная версия: строки таблицы сотрудников превращаются в карточки,
+   подпись столбца берётся из data-label. */
+@media (max-width: 991.98px) {
+    #employees-table thead { display: none; }
+
+    #employees-table,
+    #employees-table tbody,
+    #employees-table tr,
+    #employees-table td { display: block; width: 100%; }
+
+    #employees-table tr { padding: 0.5rem 0.75rem; border-bottom: 1px solid var(--tblr-border-color, #e6e7e9); position: relative; }
+    #employees-table tr.table-group-header { padding: 0; }
+
+    #employees-table td { border: 0 !important; padding: 0.2rem 0 !important; background: none !important; }
+
+    #employees-table td[data-label] { display: flex; justify-content: space-between; align-items: flex-start; gap: 0.75rem; }
+    #employees-table td[data-label]::before { content: attr(data-label); color: var(--tblr-secondary, #6b7280); font-size: 0.8rem; flex: 0 0 auto; }
+    #employees-table td.documents-cell { display: block; min-width: 0; }
+    #employees-table td.documents-cell::before { display: block; margin-bottom: 0.2rem; }
+    #employees-table .doc-flag { display: inline; margin: 0 0.35rem 0 0; }
+
+    #employees-table td.cell-select { position: absolute; top: 0.6rem; right: 0.75rem; width: auto; }
+    #employees-table td.cell-name { padding-right: 2rem !important; }
+    #employees-table td.row-actions { text-align: left !important; padding-top: 0.5rem !important; }
+
+    #employees-table tr.row-alert-red { border: 2px solid #d63939; background: rgba(214, 57, 57, 0.04); }
+    #employees-table tr.row-alert-yellow { border: 2px solid #f59f00; background: rgba(245, 159, 0, 0.05); }
+}
+
+@media (max-width: 991.98px) {
+    #employees-table tr.row-alert-red > td,
+    #employees-table tr.row-alert-yellow > td,
+    #employees-table tr.row-alert-red > td:first-child,
+    #employees-table tr.row-alert-yellow > td:first-child,
+    #employees-table tr.row-alert-red > td:last-child,
+    #employees-table tr.row-alert-yellow > td:last-child { border: 0 !important; background: none !important; }
+
+    #employees-table td[data-label] { justify-content: flex-start; align-items: center; gap: 0.4rem; }
+    #employees-table td[data-label]::before { flex: 0 0 7.5rem; }
+    #employees-table td.documents-cell { display: block; }
+}
+
+/* Строка быстрых фильтров под заголовками таблицы сотрудников. */
+#employees-table .column-filters th { padding: 0.25rem 0.5rem; font-weight: normal; text-transform: none; }
+#employees-table .column-filter { min-width: 5rem; }
+
+/* ПК: таблица не сжимается уже минимальной ширины — вместо этого у
+   .table-responsive появляется горизонтальная прокрутка (только если
+   таблица не помещается). */
+@media (min-width: 992px) {
+    #employees-table { table-layout: fixed; width: 100%; min-width: 102.5rem; }
+}
+
+/* ПК: если таблица не помещается в полную ширину (1500px) — в ячейках сроков
+   остаются только цветные значки (даты видны во всплывающей подсказке), а
+   минимальная ширина падает до 1100px; прокрутка появляется лишь ниже неё. */
+.employees-wrap { container: employees / inline-size; }
+
+@media (min-width: 992px) {
+    @container employees (max-width: 1639px) {
+        #employees-table { min-width: 90.5rem; }
+        #employees-table .doc-date { display: none; }
+    }
+}
+
+/* ПК: таблица прокручивается внутри своего блока, поэтому горизонтальная
+   полоса всегда у нижнего края окна, а не под всеми строками; заголовок и
+   строка фильтров остаются на месте при вертикальной прокрутке. */
+@media (min-width: 992px) {
+    .employees-wrap { min-height: 18rem; overflow: auto; }
+    #employees-table thead { position: sticky; top: 0; z-index: 3; background: var(--tblr-card-bg, #fff); }
+}
+
+/* Левое меню на ПК: раскрывающееся, по умолчанию скрыто. Кнопка-шеврон
+   приклеена к правому краю меню (или к левому краю окна, когда оно скрыто). */
+.sidebar-toggle { display: none; }
+
+@media (min-width: 992px) {
+    .sidebar-toggle {
+        position: fixed;
+        top: 0.75rem;
+        left: calc(15rem - 1px);
+        z-index: 1035;
+        width: 1.75rem;
+        height: 3rem;
+        align-items: center;
+        justify-content: center;
+        padding: 0;
+        border: 1px solid var(--tblr-primary, #206bc4);
+        border-left: 0;
+        border-radius: 0 0.5rem 0.5rem 0;
+        background: var(--tblr-primary, #206bc4);
+        color: #fff;
+        font-size: 1.25rem;
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+        cursor: pointer;
+        transition: left 0.2s ease;
+    }
+
+    .sidebar-toggle:hover { filter: brightness(1.1); }
+
+    .navbar-vertical.navbar-expand-lg { transition: transform 0.2s ease; }
+    .page-wrapper { transition: margin-left 0.2s ease; }
+
+    .sidebar-collapsed .navbar-vertical.navbar-expand-lg { transform: translateX(-100%); }
+    .sidebar-collapsed .navbar-vertical.navbar-expand-lg ~ .page-wrapper { margin-left: 0; padding-left: 1.75rem; }
+    .sidebar-collapsed .sidebar-toggle { left: 0; }
+}
+
+.sidebar-toggle .icon-show { display: none; }
+.sidebar-collapsed .sidebar-toggle .icon-hide { display: none; }
+.sidebar-collapsed .sidebar-toggle .icon-show { display: inline; }
+
+/* ПК: ширины колонок зафиксированы (table-layout: fixed), всё свободное
+   место получает колонка «Документы» (у неё ширины нет). Сумма фиксированных
+   колонок + 17rem под документы = min-width таблицы выше. */
+@media (min-width: 992px) {
+    #employees-table col.c-sel { width: 2.5rem; }
+    #employees-table col.c-name { width: 12rem; }
+    #employees-table col.c-pass { width: 8rem; }
+    #employees-table col.c-irs { width: 6rem; }
+    #employees-table col.c-site { width: 10rem; }
+    #employees-table col.c-date { width: 6.5rem; }
+    #employees-table col.c-act { width: 8rem; }
+    #employees-table .documents-cell { min-width: 0; }
+}
+
+@media (max-width: 991.98px) {
+    #employees-table colgroup { display: none; }
+}
+
+@media (min-width: 992px) {
+    @container employees (max-width: 1639px) {
+        #employees-table col.c-date { width: 4.5rem; }
+        #employees-table thead th { padding-left: 0.25rem; padding-right: 0.25rem; font-size: 0.6rem; letter-spacing: 0; }
+    }
+}
+
+/* Заголовки колонок не наезжают друг на друга: длинные слова переносятся. */
+@media (min-width: 992px) {
+    #employees-table thead th { white-space: normal; overflow-wrap: anywhere; }
+}
+
+/* Статус автосохранения карточки сотрудника (js/employee_autosave.js). */
+.autosave-status {
+    position: fixed;
+    right: 1rem;
+    bottom: 1rem;
+    z-index: 1040;
+    max-width: 26rem;
+    padding: 0.5rem 0.85rem;
+    border-radius: 0.5rem;
+    font-size: 0.85rem;
+    background: #1f2937;
+    color: #fff;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s ease;
+}
+
+.autosave-status.autosave-visible { opacity: 1; }
+.autosave-saved { background: #2fb344; }
+.autosave-saving { background: #206bc4; }
+.autosave-unsaved { background: #6b7280; }
+.autosave-error { background: #d63939; }

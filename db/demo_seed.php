@@ -4,13 +4,12 @@
 // НЕ для реального продакшена с настоящими сотрудниками. Запуск:
 // php db/demo_seed.php
 //
-// Добавляет: 3 демо-пользователей (hr/lawyer/manager) и 6 сотрудников
-// с паспортами и разрешительными документами разных статусов (просрочен /
-// скоро истекает / в порядке / без срока), в разных организациях/
-// подразделениях (заводятся автоматически через findOrCreate*) — чтобы
-// сразу было видно группировку, фильтры и отчёты в работе. У каждого
-// документа заполнены и уникальные для его типа поля (extra_fields) —
-// см. DOCUMENT_TYPE_EXTRA_FIELDS в includes/documents.php.
+// Добавляет: 3 демо-пользователей (hr/lawyer/manager), организации с
+// реквизитами и подписантами, регион «Москва» и сотрудников с документами
+// (по одному каждого типа), сроки которых заданы относительно сегодняшней
+// даты — чтобы в таблице сотрудников были видны все цвета светофора.
+// Реквизиты организации «Бизнес Альянс» — из образцов заказчика
+// (.agent-os/specs/2026-10-04-employee-card-processes/samples/).
 
 require __DIR__ . '/../includes/db.php';
 
@@ -38,16 +37,16 @@ foreach ($demoUsers as [$username, $fullName, $role]) {
     echo "  {$username} / Demo12345 (роль: {$role})\n";
 }
 
-$adminStmt = $db->query("SELECT id FROM users WHERE role = 'admin' ORDER BY id LIMIT 1");
-$adminId = $adminStmt->fetchColumn() ?: null;
+$adminId = $db->query("SELECT id FROM users WHERE role = 'admin' ORDER BY id LIMIT 1")->fetchColumn() ?: null;
 
-function findOrCreateOrganization(PDO $db, ?string $name): ?int
+function inDays(int $days): string
 {
-    if (!$name) {
-        return null;
-    }
+    return date('Y-m-d', strtotime(($days >= 0 ? '+' : '') . $days . ' days'));
+}
 
-    $stmt = $db->prepare('SELECT id FROM organizations WHERE name = ?');
+function findOrCreateRegion(PDO $db, string $name, string $dative): int
+{
+    $stmt = $db->prepare('SELECT id FROM regions WHERE name = ?');
     $stmt->execute([$name]);
     $id = $stmt->fetchColumn();
 
@@ -55,14 +54,42 @@ function findOrCreateOrganization(PDO $db, ?string $name): ?int
         return (int) $id;
     }
 
-    $db->prepare('INSERT INTO organizations (name) VALUES (?)')->execute([$name]);
+    $db->prepare('INSERT INTO regions (name, name_dative) VALUES (?, ?)')->execute([$name, $dative]);
 
     return (int) $db->lastInsertId();
 }
 
-function findOrCreateDepartment(PDO $db, ?int $organizationId, ?string $name): ?int
+function findOrCreateOrganization(PDO $db, array $org): int
 {
-    if (!$organizationId || !$name) {
+    $stmt = $db->prepare('SELECT id FROM organizations WHERE name = ?');
+    $stmt->execute([$org['name']]);
+    $id = $stmt->fetchColumn();
+
+    if ($id) {
+        return (int) $id;
+    }
+
+    $db->prepare(
+        'INSERT INTO organizations (name, full_name, inn, ogrn, kpp, egrul_date, legal_address, actual_address, phone, email)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+    )->execute([
+        $org['name'], $org['full_name'] ?? null, $org['inn'] ?? null, $org['ogrn'] ?? null, $org['kpp'] ?? null,
+        $org['egrul_date'] ?? null, $org['legal_address'] ?? null, $org['actual_address'] ?? null,
+        $org['phone'] ?? null, $org['email'] ?? null,
+    ]);
+    $orgId = (int) $db->lastInsertId();
+
+    foreach ($org['signers'] ?? [] as [$position, $fullName, $shortName]) {
+        $db->prepare('INSERT INTO organization_signers (organization_id, position, full_name, short_name) VALUES (?, ?, ?, ?)')
+            ->execute([$orgId, $position, $fullName, $shortName]);
+    }
+
+    return $orgId;
+}
+
+function findOrCreateDepartment(PDO $db, int $organizationId, ?string $name): ?int
+{
+    if (!$name) {
         return null;
     }
 
@@ -79,142 +106,157 @@ function findOrCreateDepartment(PDO $db, ?int $organizationId, ?string $name): ?
     return (int) $db->lastInsertId();
 }
 
-function insertEmployee(PDO $db, array $data, ?int $createdBy): int
-{
-    $organizationId = findOrCreateOrganization($db, $data['organization'] ?? null);
-    $departmentId = findOrCreateDepartment($db, $organizationId, $data['department'] ?? null);
+$moscowId = findOrCreateRegion($db, 'Москва', 'г. Москве');
 
-    $stmt = $db->prepare(
-        'INSERT INTO employees (full_name, last_name, first_name, middle_name, citizenship, birth_date, organization_id, position, department_id, phone, email, notes, created_by)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
-    );
-    $fullName = trim($data['last_name'] . ' ' . $data['first_name'] . ' ' . ($data['middle_name'] ?? ''));
-    $stmt->execute([
-        $fullName, $data['last_name'], $data['first_name'], $data['middle_name'] ?? null,
-        $data['citizenship'], $data['birth_date'], $organizationId,
-        $data['position'], $departmentId, $data['phone'] ?? null, $data['email'] ?? null,
-        $data['notes'] ?? null, $createdBy,
-    ]);
+$organizations = [
+    'ba' => [
+        'name' => 'ООО "БИЗНЕС АЛЬЯНС"',
+        'full_name' => 'Общество с ограниченной ответственностью "БИЗНЕС АЛЬЯНС"',
+        'inn' => '7716568140', 'ogrn' => '1077746078959', 'kpp' => '771701001', 'egrul_date' => '2007-01-17',
+        'legal_address' => '129085, город Москва, Проспект Мира, дом 95, строение 1, помещение 1/1',
+        'actual_address' => '141009, Московская область, город Мытищи, улица Колонцова, дом 5, строение 3, офис 210',
+        'phone' => '+7(495)795-66-45', 'email' => 'info@b-al.com',
+        'signers' => [['Генеральный директор', 'Бочков Вадим Владимирович', 'Бочков В.В.']],
+    ],
+    'stroy' => [
+        'name' => 'АО «СтройГрад»', 'full_name' => 'Акционерное общество «СтройГрад»',
+        'inn' => '7701000001', 'ogrn' => '1020000000001', 'kpp' => '770101001', 'egrul_date' => '2010-05-20',
+        'legal_address' => '101000, город Москва, улица Строителей, дом 1', 'phone' => '+7(495)000-00-01', 'email' => 'info@stroygrad.example',
+        'signers' => [['Генеральный директор', 'Строганов Сергей Сергеевич', 'Строганов С.С.']],
+    ],
+];
 
-    return (int) $db->lastInsertId();
-}
+$orgIds = [];
 
-function insertDocument(PDO $db, int $employeeId, ?int $passportDocumentId, array $data, ?int $createdBy): int
-{
-    $extraFieldsJson = !empty($data['extra']) ? json_encode($data['extra'], JSON_UNESCAPED_UNICODE) : null;
-
-    $stmt = $db->prepare(
-        'INSERT INTO employee_documents (employee_id, passport_document_id, type, number, series, issue_date, expire_date, issued_by, extra_fields, created_by)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
-    );
-    $stmt->execute([
-        $employeeId, $passportDocumentId, $data['type'], $data['number'], $data['series'] ?? null,
-        $data['issue_date'] ?? null, $data['expire_date'] ?? null, $data['issued_by'] ?? null,
-        $extraFieldsJson, $createdBy,
-    ]);
-
-    return (int) $db->lastInsertId();
+foreach ($organizations as $key => $org) {
+    $orgIds[$key] = findOrCreateOrganization($db, $org);
 }
 
 echo "\n=== Демо-сотрудники ===\n";
 
+// Сроки документов — в днях от сегодня (отрицательные — просрочено).
 $employees = [
     [
-        'employee' => [
-            'last_name' => 'Иванов', 'first_name' => 'Иван', 'middle_name' => 'Иванович',
-            'citizenship' => 'Узбекистан', 'birth_date' => '1990-03-12',
-            'organization' => 'ООО «Ромашка»', 'department' => 'Логистика', 'position' => 'Кладовщик',
-            'phone' => '+7 900 111-22-33',
+        'e' => [
+            'last_name' => 'Алам', 'first_name' => 'Наддир', 'last_name_lat' => 'ALAM', 'first_name_lat' => 'NADDIR',
+            'gender' => 'male', 'citizenship' => 'Индия', 'birth_date' => '2000-01-01',
+            'birth_country' => 'Индия', 'birth_place' => 'Бардиха, Бихар', 'residence_country' => 'Индия',
+            'visa_country' => 'Индия', 'visa_city' => 'Дели',
+            'org' => 'ba', 'department' => 'Производство', 'position' => 'Рабочий',
+            'stay_address' => ['region' => 'Московская область', 'locality' => 'город Раменское', 'street' => 'Советская', 'house' => '19', 'phone' => '+7(495)795-66-45'],
         ],
-        'passport' => ['number' => 'AA1234567', 'series' => 'AA', 'issue_date' => '2021-05-10', 'expire_date' => '2031-05-10', 'issued_by' => 'МВД Узбекистана', 'extra' => ['birth_place' => 'г. Ташкент']],
-        'documents' => [
-            ['type' => 'work_patent', 'number' => 'ПТ-778899', 'issue_date' => '2025-08-20', 'expire_date' => '2026-09-10', 'issued_by' => 'ГУ МВД по г. Москве', 'extra' => ['profession' => 'Кладовщик', 'region' => 'г. Москва']],
-            ['type' => 'registration', 'number' => 'РЕГ-001122', 'issue_date' => '2026-01-15', 'expire_date' => '2026-07-15', 'issued_by' => 'ОВМ УМВД', 'extra' => ['address' => 'г. Москва, ул. Складская, д. 5', 'registering_party' => 'ООО «Ромашка»']],
-        ],
-    ],
-    [
-        'employee' => [
-            'last_name' => 'Петров', 'first_name' => 'Пётр', 'middle_name' => 'Петрович',
-            'citizenship' => 'Таджикистан', 'birth_date' => '1988-11-02',
-            'organization' => 'ООО «Ромашка»', 'department' => 'Логистика', 'position' => 'Водитель',
-            'phone' => '+7 900 222-33-44',
-        ],
-        'passport' => ['number' => 'BB2233445', 'series' => 'BB', 'issue_date' => '2019-11-20', 'expire_date' => '2029-11-20', 'issued_by' => 'МВД Таджикистана', 'extra' => ['birth_place' => 'г. Душанбе']],
-        'documents' => [
-            ['type' => 'work_patent', 'number' => 'ПТ-556677', 'issue_date' => '2025-12-01', 'expire_date' => '2026-12-01', 'issued_by' => 'ГУ МВД по г. Москве', 'extra' => ['profession' => 'Водитель', 'region' => 'г. Москва']],
+        'docs' => [
+            'passport' => ['U', '3148572', -2000, 1800, 'ПАТНА'],
+            'visa' => [null, 'V-1001', -10, 100, null],
+            'work_permit' => [null, 'РНР-1', -50, 75, null],
+            'registration' => [null, 'МУ-1', -20, 45, null],
+            'medical_certificate' => [null, 'МС-1', -100, 20, null],
+            'dms' => [null, 'ДМС-1', -100, 40, null],
         ],
     ],
     [
-        'employee' => [
+        'e' => [
+            'last_name' => 'Ансари', 'first_name' => 'Саджид', 'last_name_lat' => 'ANSARI', 'first_name_lat' => 'SAJID',
+            'gender' => 'male', 'citizenship' => 'Индия', 'birth_date' => '1995-03-12',
+            'birth_country' => 'Индия', 'birth_place' => 'Мумбаи', 'residence_country' => 'Индия',
+            'visa_country' => 'Индия', 'visa_city' => 'Дели',
+            'org' => 'ba', 'department' => 'Производство', 'position' => 'Рабочий',
+            'stay_address' => ['region' => 'Московская область', 'locality' => 'город Мытищи', 'street' => 'Колонцова', 'house' => '5'],
+        ],
+        'docs' => [
+            'passport' => ['AJ', '669184', -1000, 200, 'МУМБАИ'],
+            'visa' => [null, 'V-1002', -10, 40, null],
+            'work_permit' => [null, 'РНР-2', -50, 120, null],
+            'registration' => [null, 'МУ-2', -20, 10, null],
+            'dms' => [null, 'ДМС-2', -100, 400, null],
+        ],
+    ],
+    [
+        'e' => [
             'last_name' => 'Сидорова', 'first_name' => 'Анна', 'middle_name' => 'Сергеевна',
-            'citizenship' => 'Киргизия', 'birth_date' => '1995-06-23',
-            'organization' => 'АО «СтройГрад»', 'department' => 'Строительство', 'position' => 'Разнорабочая',
-            'phone' => '+7 900 333-44-55',
+            'gender' => 'female', 'citizenship' => 'Киргизия', 'birth_date' => '1995-06-23',
+            'org' => 'stroy', 'department' => 'Строительство', 'position' => 'Разнорабочая',
         ],
-        'passport' => ['number' => 'CC3344556', 'series' => 'CC', 'issue_date' => '2022-02-14', 'expire_date' => '2032-02-14', 'issued_by' => 'МВД Киргизии', 'extra' => ['birth_place' => 'г. Бишкек']],
-        'documents' => [
-            ['type' => 'registration', 'number' => 'РЕГ-334455', 'issue_date' => '2026-02-01', 'expire_date' => '2026-08-30', 'issued_by' => 'ОВМ УМВД', 'extra' => ['address' => 'г. Москва, ул. Строителей, д. 12', 'registering_party' => 'АО «СтройГрад»']],
-        ],
-    ],
-    [
-        'employee' => [
-            'last_name' => 'Каримов', 'first_name' => 'Фарход', 'middle_name' => 'Рустамович',
-            'citizenship' => 'Узбекистан', 'birth_date' => '1982-01-19',
-            'organization' => 'АО «СтройГрад»', 'department' => 'Строительство', 'position' => 'Бригадир',
-            'phone' => '+7 900 444-55-66',
-        ],
-        'passport' => ['number' => 'DD4455667', 'series' => 'DD', 'issue_date' => '2018-07-01', 'expire_date' => '2026-07-01', 'issued_by' => 'МВД Узбекистана', 'extra' => ['birth_place' => 'г. Самарканд']],
-        'documents' => [
-            ['type' => 'work_permit', 'number' => 'РАЗР-998877', 'issue_date' => '2023-01-10', 'expire_date' => '2026-01-10', 'issued_by' => 'ГУ МВД по г. Москве', 'extra' => ['profession' => 'Бригадир', 'employer_name' => 'АО «СтройГрад»']],
+        'docs' => [
+            'passport' => ['CC', '3344556', -1500, 365, 'МВД Киргизии'],
+            'registration' => [null, 'МУ-3', -20, -5, null],
         ],
     ],
     [
-        'employee' => [
-            'last_name' => 'Юсупова', 'first_name' => 'Дилноза', 'middle_name' => 'Акрамовна',
-            'citizenship' => 'Таджикистан', 'birth_date' => '1993-09-30',
-            'organization' => 'ИП Смирнов А.В.', 'department' => 'Клининг', 'position' => 'Уборщица',
-            'phone' => '+7 900 555-66-77',
-        ],
-        'passport' => ['number' => 'EE5566778', 'series' => 'EE', 'issue_date' => '2023-09-05', 'expire_date' => '2033-09-05', 'issued_by' => 'МВД Таджикистана', 'extra' => ['birth_place' => 'г. Худжанд']],
-        'documents' => [
-            ['type' => 'work_patent', 'number' => 'ПТ-112233', 'issue_date' => '2026-08-01', 'expire_date' => '2026-09-01', 'issued_by' => 'ГУ МВД по г. Москве', 'extra' => ['profession' => 'Уборщица', 'region' => 'г. Москва']],
-            ['type' => 'registration', 'number' => 'РЕГ-667788', 'issue_date' => '2026-06-01', 'expire_date' => '2027-06-01', 'issued_by' => 'ОВМ УМВД', 'extra' => ['address' => 'г. Москва, ул. Клининговая, д. 3', 'registering_party' => 'ИП Смирнов А.В.']],
-        ],
-    ],
-    [
-        'employee' => [
+        'e' => [
             'last_name' => 'Назаров', 'first_name' => 'Бахтиёр', 'middle_name' => 'Олимович',
-            'citizenship' => 'Киргизия', 'birth_date' => '1991-04-04',
-            'organization' => null, 'department' => 'Склад', 'position' => 'Грузчик',
-            'phone' => '+7 900 666-77-88',
-            'notes' => 'Организация ещё не назначена — демонстрация группы «Без организации».',
+            'gender' => 'male', 'citizenship' => 'Киргизия', 'birth_date' => '1991-04-04',
+            'org' => null, 'position' => 'Грузчик',
         ],
-        'passport' => ['number' => 'FF6677889', 'series' => 'FF', 'issue_date' => '2024-04-04', 'expire_date' => '2034-04-04', 'issued_by' => 'МВД Киргизии', 'extra' => ['birth_place' => 'г. Ош']],
-        'documents' => [
-            ['type' => 'visa', 'number' => 'ВИЗА-001', 'issue_date' => '2026-01-01', 'expire_date' => null, 'issued_by' => 'Посольство РФ', 'extra' => ['visa_category' => 'Рабочая', 'visa_multiplicity' => 'Многократная']],
+        'docs' => [
+            'passport' => ['FF', '6677889', -300, 3000, 'МВД Киргизии'],
         ],
     ],
 ];
 
 foreach ($employees as $entry) {
+    $e = $entry['e'];
     $existsStmt = $db->prepare('SELECT id FROM employees WHERE last_name = ? AND first_name = ?');
-    $existsStmt->execute([$entry['employee']['last_name'], $entry['employee']['first_name']]);
+    $existsStmt->execute([$e['last_name'], $e['first_name']]);
 
     if ($existsStmt->fetch()) {
-        echo "  {$entry['employee']['last_name']} {$entry['employee']['first_name']} уже существует, пропуск\n";
+        echo "  {$e['last_name']} {$e['first_name']} уже существует, пропуск\n";
         continue;
     }
 
-    $employeeId = insertEmployee($db, $entry['employee'], $adminId);
+    $orgId = $e['org'] ? $orgIds[$e['org']] : null;
+    $deptId = $orgId ? findOrCreateDepartment($db, $orgId, $e['department'] ?? null) : null;
+    $fullName = trim($e['last_name'] . ' ' . $e['first_name'] . ' ' . ($e['middle_name'] ?? ''));
 
-    $passportData = $entry['passport'] + ['type' => 'passport'];
-    $passportId = insertDocument($db, $employeeId, null, $passportData, $adminId);
+    $db->prepare(
+        'INSERT INTO employees (full_name, last_name, first_name, middle_name, last_name_lat, first_name_lat, gender, citizenship, birth_date,
+            birth_country, birth_place, residence_country, visa_country, visa_city, stay_address, organization_id, region_id, position, department_id, created_by)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+    )->execute([
+        $fullName, $e['last_name'], $e['first_name'], $e['middle_name'] ?? null, $e['last_name_lat'] ?? null, $e['first_name_lat'] ?? null,
+        $e['gender'] ?? null, $e['citizenship'], $e['birth_date'], $e['birth_country'] ?? null, $e['birth_place'] ?? null,
+        $e['residence_country'] ?? null, $e['visa_country'] ?? null, $e['visa_city'] ?? null,
+        isset($e['stay_address']) ? json_encode($e['stay_address'], JSON_UNESCAPED_UNICODE) : null,
+        $orgId, $orgId ? $moscowId : null, $e['position'], $deptId, $adminId,
+    ]);
+    $employeeId = (int) $db->lastInsertId();
 
-    foreach ($entry['documents'] as $doc) {
-        insertDocument($db, $employeeId, $passportId, $doc, $adminId);
+    foreach ($entry['docs'] as $type => [$series, $number, $issueOffset, $expireOffset, $issuedBy]) {
+        $db->prepare(
+            'INSERT INTO employee_documents (employee_id, type, series, number, issue_date, expire_date, issued_by, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+        )->execute([$employeeId, $type, $series, $number, inDays($issueOffset), inDays($expireOffset), $issuedBy, $adminId]);
     }
 
-    echo "  {$entry['employee']['last_name']} {$entry['employee']['first_name']} — добавлен (id={$employeeId}), паспорт + " . count($entry['documents']) . " документ(ов)\n";
+    echo "  {$fullName} — добавлен (id={$employeeId}), документов: " . count($entry['docs']) . "\n";
 }
 
+
+echo "\n=== Демо-объекты ===\n";
+
+$demoSites = [
+    ['ЖК «Северный парк»', 'Строительство жилого комплекса, корпуса 1–3', 'г. Москва, ул. Лесная, д. 10'],
+    ['Склад «Подольск»', 'Логистический комплекс, погрузочно-разгрузочные работы', 'Московская область, г. Подольск, Промышленная ул., д. 5'],
+];
+$siteIds = [];
+
+foreach ($demoSites as [$siteName, $siteDescription, $siteAddress]) {
+    $existing = $db->prepare('SELECT id FROM work_sites WHERE name = ?');
+    $existing->execute([$siteName]);
+    $siteId = $existing->fetchColumn();
+
+    if (!$siteId) {
+        $db->prepare('INSERT INTO work_sites (name, description, address) VALUES (?, ?, ?)')->execute([$siteName, $siteDescription, $siteAddress]);
+        $siteId = $db->lastInsertId();
+    }
+
+    $siteIds[] = (int) $siteId;
+    echo "  {$siteName}\n";
+}
+
+// Сотрудникам без объекта — по кругу демо-объекты.
+$withoutSite = $db->query('SELECT id FROM employees WHERE work_site_id IS NULL ORDER BY id')->fetchAll(PDO::FETCH_COLUMN);
+
+foreach ($withoutSite as $index => $employeeId) {
+    $db->prepare('UPDATE employees SET work_site_id = ? WHERE id = ?')->execute([$siteIds[$index % count($siteIds)], $employeeId]);
+}
 echo "\nГотово.\n";

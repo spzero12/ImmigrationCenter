@@ -5,6 +5,12 @@
             "name": "php-dev-server",
             "url": "http://127.0.0.1:8000",
             "port": 8000
+        },
+        {
+            "name": "php-local",
+            "runtimeExecutable": "powershell",
+            "runtimeArgs": ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "scripts/local_dev.ps1"],
+            "port": 8001
         }
     ]
 }

@@ -77,6 +77,17 @@ foreach (DOCUMENT_TYPES_ORDER as $type) {
 
 $errors = [];
 
+// Автосохранение (js/employee_autosave.js): тот же обработчик, но ответ — JSON,
+// файлы сканов не принимаются, документы не удаляются, аудит не чаще раза в 10 минут.
+$isAutosave = $_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['_autosave']);
+
+function autosaveResponse(array $payload): void
+{
+    header('Content-Type: application/json; charset=utf-8');
+    echo json_encode($payload, JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     foreach (EMPLOYEE_TEXT_FIELDS as $field) {
         $employee[$field] = trim($_POST[$field] ?? '');
@@ -130,6 +141,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 
+    // Новая карточка без имени при автосохранении просто ещё не сохраняется.
+    if ($isAutosave && !$isEdit && $employee['first_name'] === '') {
+        autosaveResponse(['ok' => false, 'skipped' => true]);
+    }
+
     if ($employee['first_name'] === '') {
         $errors[] = 'Укажите имя сотрудника';
     }
@@ -142,7 +158,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // оставляла карточку наполовину сохранённой.
     $newScans = [];
 
-    if (!$errors) {
+    if (!$errors && !$isAutosave) {
         foreach (DOCUMENT_TYPES_ORDER as $type) {
             $file = $_FILES['scan_' . $type] ?? null;
 
@@ -156,6 +172,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
             }
         }
+    }
+
+    if ($errors && $isAutosave) {
+        autosaveResponse(['ok' => false, 'errors' => $errors]);
     }
 
     if ($errors) {
@@ -216,7 +236,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 if ($isEmpty && !isset($newScans[$type])) {
                     // Пустой блок = документа нет. Скан удаляем вместе с записью
                     // (файл — после коммита).
-                    if ($existing) {
+                    // При автосохранении пустой блок не удаляет документ (и скан):
+                    // поле могли очистить на время редактирования.
+                    if ($existing && !$isAutosave) {
                         $db->prepare('DELETE FROM employee_documents WHERE id = ?')->execute([$existing['id']]);
                         $replacedScans[] = $existing['scan_stored_name'];
                     }
@@ -250,7 +272,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
             }
 
-            logAudit($auditAction, 'employee', $employeeId, $fullName);
+            $writeAudit = true;
+
+            if ($isAutosave && $auditAction === 'update') {
+                $recentStmt = $db->prepare(
+                    "SELECT 1 FROM audit_log WHERE entity_type = 'employee' AND entity_id = ? AND user_id = ? AND action = 'update'
+                       AND created_at > NOW() - INTERVAL 10 MINUTE LIMIT 1"
+                );
+                $recentStmt->execute([$employeeId, currentUser()['id']]);
+                $writeAudit = !$recentStmt->fetch();
+            }
+
+            if ($writeAudit) {
+                logAudit($auditAction, 'employee', $employeeId, $fullName);
+            }
+
             $db->commit();
         } catch (Throwable $e) {
             $db->rollBack();
@@ -266,6 +302,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             deleteStoredScan($stored);
         }
 
+        if ($isAutosave) {
+            autosaveResponse(['ok' => true, 'id' => $employeeId, 'created' => !$isEdit, 'saved_at' => date('H:i:s')]);
+        }
+
         header('Location: ' . ($isEdit ? 'employee_form.php?id=' . $employeeId . '&saved=1' : 'employee_form.php?id=' . $employeeId . '&created=1'));
         exit;
     }
@@ -277,6 +317,7 @@ $regions = getRegions($db);
 $workSites = getWorkSites($db);
 
 $pageTitle = $isEdit ? 'Карточка сотрудника' : 'Новый сотрудник';
+$extraScripts = ['js/employee_autosave.js'];
 require __DIR__ . '/includes/header.php';
 
 function e($value): string
@@ -305,7 +346,7 @@ function e($value): string
             <div class="alert alert-danger"><?php echo e($error); ?></div>
         <?php endforeach; ?>
 
-        <form method="post" enctype="multipart/form-data">
+        <form method="post" enctype="multipart/form-data" id="employee-form" data-employee-id="<?php echo (int) ($employee['id'] ?? 0); ?>">
             <div class="card">
                 <div class="card-header"><h3 class="card-title">Личные данные</h3></div>
                 <div class="card-body">
@@ -521,6 +562,7 @@ function e($value): string
             <div class="form-footer">
                 <a href="employees.php" class="btn btn-link">К списку</a>
                 <button type="submit" class="btn btn-primary">Сохранить</button>
+                <span class="text-secondary ms-3 small">Изменения сохраняются автоматически (сканы — только кнопкой «Сохранить»). Ctrl+Z — отменить, Ctrl+Shift+Z — вернуть.</span>
             </div>
         </form>
 

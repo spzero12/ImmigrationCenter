@@ -15,7 +15,13 @@ const SHEET_DOT_DATE_FIELDS = [
 // Поля, которые в готовом документе печатаются ЗАГЛАВНЫМИ.
 const SHEET_UPPERCASE_FIELDS = [
     'petition' => ['birth_country', 'birth_place', 'citizenship', 'residence_country', 'residence_region', 'visa_country', 'visa_city'],
+    'visa_petition' => ['last_name', 'last_name_lat', 'first_name', 'first_name_lat', 'middle_name', 'middle_name_lat', 'citizenship'],
+    'visa_questionnaire' => ['last_name', 'last_name_lat', 'first_name', 'first_name_lat', 'middle_name', 'middle_name_lat', 'citizenship', 'birth_place', 'home_address'],
 ];
+
+// Поля, которые в docx делятся на две линии бланка (шаблон: ключ_1 и ключ_2), а на
+// странице — одно поле (перенос по ширине листа).
+const SHEET_SPLIT_FIELDS = ['stay_address', 'org_address_phone', 'inviting_party', 'route', 'workplace'];
 
 function sheetEsc($value): string
 {
@@ -56,21 +62,25 @@ function renderDocumentSheet(string $document, array $definitions, array $curren
     $html = preg_replace_callback('/\$\{([a-z0-9_]+)\}/', static function ($m) use ($definitions, $current, $defaults, $dots, $uppercase) {
         $key = $m[1];
 
-        // Адрес в гарантийном письме: в docx он делится на две линии бланка, а на
-        // странице это одно поле (перенос по ширине листа).
-        if ($key === 'stay_address_2') {
-            return '';
+        // Длинные поля делятся в docx на две линии (ключ_1, ключ_2), а на странице это
+        // одно поле: первая часть — само поле, вторая — пусто.
+        if (preg_match('/^(.+)_([12])$/', $key, $split) && in_array($split[1], SHEET_SPLIT_FIELDS, true)) {
+            if ($split[2] === '2') {
+                return '';
+            }
+
+            $key = $split[1];
         }
 
-        if ($key === 'stay_address_1') {
-            $key = 'stay_address';
-        }
+        // Выбор из списка (пол, кратность и категория визы): клетка «X», клик — выбрать.
+        foreach (documentChoiceFields($definitions) as $field => $options) {
+            if (strpos($key, $field . '_') === 0 && isset($options[substr($key, strlen($field) + 1)])) {
+                $option = substr($key, strlen($field) + 1);
 
-        if ($key === 'gender_male' || $key === 'gender_female') {
-            $gender = $key === 'gender_male' ? 'male' : 'female';
-
-            return '<span class="wf-gender" data-gender="' . $gender . '" title="Пол: нажмите, чтобы выбрать">'
-                . (($current['gender'] ?? '') === $gender ? 'X' : '') . '</span>';
+                return '<span class="wf-choice" data-group="' . $field . '" data-value="' . $option . '" title="'
+                    . sheetEsc(sheetFieldName($definitions[$field][0]) . ': ' . $options[$option]) . ' — нажмите, чтобы выбрать">'
+                    . ((string) ($current[$field] ?? '') === (string) $option ? 'X' : '') . '</span>';
+            }
         }
 
         $definition = $definitions[$key] ?? null;
@@ -122,8 +132,8 @@ div.WordSection1 {
 .wf.changed .wf-val { background: #fff3cd; border-bottom-color: #f59f00; }
 .wf.invalid .wf-val { box-shadow: 0 0 0 2px #d63939; }
 .wf.uc .wf-val { text-transform: uppercase; }
-.wf-gender { display: inline-block; min-width: 1.1em; text-align: center; color: #d63939; font-weight: bold; cursor: pointer; background: #fdeded; }
-.wf-gender:hover { background: #fbdcdc; }
+.wf-choice { display: inline-block; min-width: 1.1em; text-align: center; color: #d63939; font-weight: bold; cursor: pointer; background: #fdeded; }
+.wf-choice:hover { background: #fbdcdc; }
 </style>
 CSS;
 
@@ -198,24 +208,27 @@ CSS;
         markChanged(wf);
     });
 
-    function setGender(value) {
-        document.body.dataset.gender = value;
-        document.querySelectorAll('.wf-gender').forEach(el => { el.textContent = el.dataset.gender === value ? 'X' : ''; });
+    // Выбор из списка: клетки одной группы работают как переключатель, повторный клик снимает выбор.
+    function groupKey(group) { return 'c_' + group; }
+
+    function setChoice(group, value) {
+        document.body.dataset[groupKey(group)] = value;
+        document.querySelectorAll('.wf-choice[data-group="' + group + '"]').forEach(el => { el.textContent = el.dataset.value === value ? 'X' : ''; });
     }
 
     document.addEventListener('click', function (e) {
-        const el = e.target.closest ? e.target.closest('.wf-gender') : null;
-        if (el) { setGender(document.body.dataset.gender === el.dataset.gender ? '' : el.dataset.gender); }
+        const el = e.target.closest ? e.target.closest('.wf-choice') : null;
+        if (el) { setChoice(el.dataset.group, document.body.dataset[groupKey(el.dataset.group)] === el.dataset.value ? '' : el.dataset.value); }
     });
 
     window.addEventListener('load', notify);
 
-    window.sheetInit = function (gender) { document.body.dataset.gender = gender || ''; };
+    window.sheetInit = function (choices) { Object.keys(choices || {}).forEach(group => { document.body.dataset[groupKey(group)] = choices[group] || ''; }); };
 
     window.getSheetValues = function () {
         const values = {};
         document.querySelectorAll('.wf').forEach(wf => { values[wf.dataset.key] = currentValue(wf.querySelector('.wf-val')); });
-        if (document.querySelector('.wf-gender')) { values.gender = document.body.dataset.gender || ''; }
+        document.querySelectorAll('.wf-choice').forEach(el => { values[el.dataset.group] = document.body.dataset[groupKey(el.dataset.group)] || ''; });
         return values;
     };
 
@@ -233,7 +246,13 @@ JS;
     $html = preg_replace('/<br\s+clear=all\s+style=\'page-break-before:always\'>/i', '<span class="pgbreak"></span>', $html);
     $html = preg_replace('/<body\b/', '<body class="desk"', $html, 1);
     $html = str_replace('</head>', $css . '</head>', $html);
-    $html = str_replace('</body>', $script . '<script>sheetInit(' . json_encode($current['gender'] ?? '') . ');</script></body>', $html);
+    $choices = [];
+
+    foreach (array_keys(documentChoiceFields($definitions)) as $field) {
+        $choices[$field] = (string) ($current[$field] ?? '');
+    }
+
+    $html = str_replace('</body>', $script . '<script>sheetInit(' . json_encode($choices ?: new stdClass()) . ');</script></body>', $html);
 
     return $html;
 }

@@ -1,6 +1,7 @@
 <?php
 
 require __DIR__ . '/includes/auth.php';
+require_once __DIR__ . '/includes/processes.php';
 requireLogin();
 
 $pageTitle = 'Сотрудники';
@@ -35,10 +36,24 @@ require __DIR__ . '/includes/header.php';
             </div>
         </div>
         <div class="card-actions d-flex gap-2">
-            <button type="button" class="btn btn-outline-primary" id="inventory-button" disabled>
-                <i class="ti ti-list-details"></i>
-                Сформировать опись <span id="inventory-count"></span>
-            </button>
+            <?php // Описи у процессов разные: тип описи выбирается в этой же кнопке (меню). ?>
+            <div class="dropdown">
+                <button type="button" class="btn btn-outline-primary dropdown-toggle" id="inventory-button" data-bs-toggle="dropdown" aria-expanded="false" disabled
+                        title="Отметьте сотрудников галочками слева">
+                    <i class="ti ti-list-details"></i>
+                    Сформировать опись <span id="inventory-count"></span>
+                </button>
+                <div class="dropdown-menu dropdown-menu-end">
+                    <?php foreach (INVENTORY_TYPES as $inventoryType => $inventoryDefinition): ?>
+                        <a class="dropdown-item" href="#" data-inventory-type="<?php echo htmlspecialchars($inventoryType); ?>">
+                            <div style="max-width: 22rem;">
+                                <div class="fw-bold"><?php echo htmlspecialchars($inventoryDefinition['label']); ?></div>
+                                <div class="text-secondary small text-wrap"><?php echo htmlspecialchars($inventoryDefinition['description']); ?></div>
+                            </div>
+                        </a>
+                    <?php endforeach; ?>
+                </div>
+            </div>
             <a class="btn btn-primary" href="employee_form.php">
                 <i class="ti ti-plus"></i>
                 Добавить сотрудника

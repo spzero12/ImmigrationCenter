@@ -13,7 +13,7 @@ $word.Visible = $false
 $word.DisplayAlerts = 0
 
 try {
-    foreach ($name in 'petition', 'guarantee_letter') {
+    foreach ($name in 'petition', 'guarantee_letter', 'visa_petition', 'visa_questionnaire') {
         $source = [string](Join-Path $dir "$name.docx")
         $doc = $word.Documents.Open($source, $false, $true)
         $doc.WebOptions.Encoding = 65001

@@ -18,12 +18,17 @@
     const SAVE_DELAY_MS = 400;
     const INTERVAL_MS = 20000;
     const HISTORY_LIMIT = 200;
+    const RETRY_DELAY_MS = 15000;   // первая пауза после сбоя; дальше удваивается
+    const MAX_FAILURES = 4;         // после стольких сбоев подряд автосохранение останавливается
 
     let employeeId = parseInt(form.dataset.employeeId, 10) || 0;
     let dirty = false;
     let inFlight = null;
     let delayTimer = null;
     let submitting = false;
+    let failed = false;
+    let failures = 0;   // сбоев подряд
+    let halted = false; // автосохранение остановлено до перезагрузки страницы
 
     // ---------- Статус ----------
 
@@ -98,16 +103,18 @@
         delayTimer = setTimeout(save, delay);
     }
 
+    // Обычная urlencoded-форма (не multipart): так запрос ближе всего к обычной
+    // отправке формы и не отсекается защитными фильтрами хостинга. Файлы не шлём.
     function snapshot() {
-        const data = new FormData(form);
+        const data = new URLSearchParams();
 
-        Array.from(data.keys()).forEach(function (key) {
-            if (key.indexOf('scan_') === 0) {
-                data.delete(key);
+        new FormData(form).forEach(function (value, key) {
+            if (typeof value === 'string') {
+                data.append(key, value);
             }
         });
 
-        data.append('_autosave', '1');
+        data.append('autosave', '1');
 
         return data;
     }
@@ -116,8 +123,25 @@
         return employeeId ? 'employee_form.php?id=' + employeeId : 'employee_form.php';
     }
 
+    function retryDelay() {
+        return RETRY_DELAY_MS * Math.pow(2, Math.max(0, failures - 1));
+    }
+
+    // Начало ответа сервера без разметки — чтобы в сообщении была видна причина.
+    function snippet(text) {
+        const plain = String(text).replace(/<style[\s\S]*?<\/style>|<script[\s\S]*?<\/script>|<[^>]*>/gi, ' ').replace(/\s+/g, ' ').trim();
+
+        if (plain === '') {
+            return '';
+        }
+
+        console.warn('Автосохранение: ответ сервера:', text);
+
+        return ': «' + plain.slice(0, 120) + '»';
+    }
+
     function save() {
-        if (submitting || !dirty) {
+        if (halted || submitting || !dirty) {
             return inFlight || Promise.resolve();
         }
 
@@ -133,10 +157,26 @@
             method: 'POST',
             body: snapshot(),
             credentials: 'same-origin',
-            headers: { 'Accept': 'application/json' },
         })
-            .then(function (response) { return response.json(); })
+            .then(function (response) {
+                return response.text().then(function (text) {
+                    try {
+                        return JSON.parse(text);
+                    } catch (e) {
+                        const reason = response.redirected && /login\.php/.test(response.url)
+                            ? 'сессия истекла — войдите заново в соседней вкладке и вернитесь сюда'
+                            : 'сервер вернул ошибку (HTTP ' + response.status + ')' + snippet(text);
+
+                        const failure = new Error(reason);
+
+                        failure.status = response.status;
+                        throw failure;
+                    }
+                });
+            })
             .then(function (result) {
+                failures = 0;
+
                 if (result.ok) {
                     if (result.created) {
                         employeeId = result.id;
@@ -153,16 +193,32 @@
                     setStatus('error', 'Не сохранено: ' + (result.errors || ['ошибка']).join('; '));
                 }
             })
-            .catch(function () {
+            .catch(function (error) {
                 dirty = true;
-                setStatus('error', 'Не удалось сохранить (нет связи или нужно войти заново). Повторю автоматически.');
+                failed = true;
+                failures += 1;
+
+                const reason = error instanceof TypeError ? 'нет связи с сервером' : error.message;
+                // 403/429 — сервер сам блокирует запросы: настаивать нельзя.
+                const blocked = error.status === 403 || error.status === 429;
+
+                if (blocked || failures >= MAX_FAILURES) {
+                    halted = true;
+                    clearTimeout(delayTimer);
+                    setStatus('error', 'Автосохранение остановлено: ' + reason + '. Нажмите «Сохранить» внизу страницы, чтобы не потерять изменения.');
+                } else {
+                    setStatus('error', 'Не удалось сохранить: ' + reason + '. Повторю через ' + retryDelay() / 1000 + ' с.');
+                }
             })
             .then(function () {
                 inFlight = null;
 
-                if (dirty && !submitting) {
-                    scheduleSave(SAVE_DELAY_MS);
+                if (dirty && !submitting && !halted) {
+                    // После сбоя не частим: пауза растёт 15 → 30 → 60 с, иначе — быстро.
+                    scheduleSave(failed ? retryDelay() : SAVE_DELAY_MS);
                 }
+
+                failed = false;
             });
 
         return inFlight;
@@ -191,7 +247,7 @@
 
     // Закрытие или сворачивание вкладки: последняя попытка сохранить.
     function flushOnLeave() {
-        if (dirty && !inFlight && !submitting && navigator.sendBeacon) {
+        if (dirty && !inFlight && !submitting && !halted && navigator.sendBeacon) {
             dirty = !navigator.sendBeacon(endpoint(), snapshot());
         }
     }
@@ -202,6 +258,17 @@
         }
     });
     window.addEventListener('pagehide', flushOnLeave);
+
+    // Хостинг может отклонять multipart/form-data (403), а форма отправляется так
+    // из-за полей для сканов. Если файлы не выбраны, шлём обычную urlencoded-форму —
+    // сервер читает ту же $_POST. Если выбран скан, multipart нужен.
+    function chooseEncoding() {
+        const hasFiles = Array.prototype.some.call(form.querySelectorAll('input[type="file"]'), function (input) {
+            return input.files && input.files.length > 0;
+        });
+
+        form.enctype = hasFiles ? 'multipart/form-data' : 'application/x-www-form-urlencoded';
+    }
 
     // Кнопка «Сохранить»: дожидаемся идущего автосохранения (иначе новая
     // карточка могла бы создаться дважды), затем отправляем форму как обычно.
@@ -216,6 +283,7 @@
 
             pending.then(function () {
                 submitting = true;
+                chooseEncoding();
                 form.submit();
             });
 
@@ -225,6 +293,7 @@
         submitting = true;
         dirty = false;
         clearTimeout(delayTimer);
+        chooseEncoding();
     });
 
     // ---------- Отмена / возврат (Ctrl+Z) ----------

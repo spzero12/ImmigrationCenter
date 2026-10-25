@@ -1,7 +1,8 @@
 <?php
 
-// Опись документов для нескольких сотрудников: GET ?ids=1,2,3 — форма
-// шапки справки, POST — выгрузка .docx. Не хранится (каждый раз заново).
+// Опись документов для нескольких сотрудников: GET ?ids=1,2,3&type=invitation|visa —
+// форма шапки, POST — выгрузка .docx. Не хранится (каждый раз заново).
+// У процессов «Приглашение» и «Виза» описи разные; без type показывается выбор.
 
 require __DIR__ . '/includes/auth.php';
 require_once __DIR__ . '/includes/processes.php';
@@ -19,6 +20,12 @@ foreach ($ids as $id) {
     if ($context) {
         $contexts[] = $context;
     }
+}
+
+$type = (string) ($_POST['type'] ?? $_GET['type'] ?? '');
+
+if (!isset(INVENTORY_TYPES[$type])) {
+    $type = '';
 }
 
 $error = null;
@@ -44,10 +51,18 @@ if ($organization) {
     $signers = $signersStmt->fetchAll();
 }
 
-if (!$error && $_SERVER['REQUEST_METHOD'] === 'POST') {
+if (!$error && $type !== '' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     $signerStmt = $db->prepare('SELECT * FROM organization_signers WHERE id = ? AND organization_id = ?');
     $signerStmt->execute([(int) ($_POST['signer_id'] ?? 0), $organization['id'] ?? 0]);
     $signer = $signerStmt->fetch();
+
+    if ($type === 'visa') {
+        $tmp = buildVisaInventory($contexts, [
+            'signer_position' => $signer['position'] ?? '',
+            'signer_name' => $signer['full_name'] ?? '',
+        ], $organization, $region);
+        docxSend($tmp, 'Опись на визу ' . date('d.m.Y') . '.docx');
+    }
 
     $header = [
         'reference_number' => trim($_POST['reference_number'] ?? ''),
@@ -59,15 +74,15 @@ if (!$error && $_SERVER['REQUEST_METHOD'] === 'POST') {
     ];
 
     $tmp = buildInventory($contexts, $header, $organization, $region);
-    docxSend($tmp, 'Опись ' . date('d.m.Y') . '.docx');
+    docxSend($tmp, 'Опись на приглашение ' . date('d.m.Y') . '.docx');
 }
 
-$pageTitle = 'Опись';
+$pageTitle = $type !== '' ? INVENTORY_TYPES[$type]['label'] : 'Опись';
 require __DIR__ . '/includes/header.php';
 ?>
 
 <div class="page-header d-print-none mb-3">
-    <h2 class="page-title">Опись документов</h2>
+    <h2 class="page-title"><?php echo htmlspecialchars($type !== '' ? INVENTORY_TYPES[$type]['label'] : 'Опись документов'); ?></h2>
 </div>
 
 <div class="row justify-content-center">
@@ -75,6 +90,19 @@ require __DIR__ . '/includes/header.php';
         <?php if ($error): ?>
             <div class="alert alert-danger"><?php echo htmlspecialchars($error); ?></div>
             <a href="employees.php" class="btn btn-link">К списку сотрудников</a>
+        <?php elseif ($type === ''): ?>
+        <div class="card">
+            <div class="card-header"><h3 class="card-title">Какую опись сформировать?</h3></div>
+            <div class="list-group list-group-flush">
+                <?php foreach (INVENTORY_TYPES as $inventoryType => $inventoryDefinition): ?>
+                    <a class="list-group-item list-group-item-action" href="inventory.php?type=<?php echo htmlspecialchars($inventoryType); ?>&amp;ids=<?php echo htmlspecialchars(implode(',', $ids)); ?>">
+                        <div class="fw-bold"><i class="ti ti-list-details me-1"></i><?php echo htmlspecialchars($inventoryDefinition['label']); ?></div>
+                        <div class="text-secondary small"><?php echo htmlspecialchars($inventoryDefinition['description']); ?></div>
+                    </a>
+                <?php endforeach; ?>
+            </div>
+        </div>
+        <a href="employees.php" class="btn btn-link mt-2">Назад</a>
         <?php else: ?>
         <div class="card">
             <div class="card-body">
@@ -88,10 +116,14 @@ require __DIR__ . '/includes/header.php';
                         </li>
                     <?php endforeach; ?>
                 </ul>
+                <?php if ($type === 'invitation'): ?>
                 <p class="form-hint">Кратность берётся из данных процесса «Приглашение» каждого сотрудника.</p>
+                <?php endif; ?>
 
                 <form method="post">
                     <input type="hidden" name="ids" value="<?php echo htmlspecialchars(implode(',', $ids)); ?>">
+                    <input type="hidden" name="type" value="<?php echo htmlspecialchars($type); ?>">
+                    <?php if ($type === 'invitation'): ?>
                     <div class="row">
                         <div class="col-md-4 mb-3">
                             <label class="form-label">Справка №</label>
@@ -123,6 +155,18 @@ require __DIR__ . '/includes/header.php';
                         <label class="form-label">Должность, ФИО сотрудника УВМ</label>
                         <input type="text" class="form-control" name="officer">
                     </div>
+                    <?php else: ?>
+                    <div class="mb-3">
+                        <label class="form-label">Подписант (должность и ФИО внизу описи)</label>
+                        <select class="form-select" name="signer_id">
+                            <option value="">— не выбран (будет «Генеральный директор») —</option>
+                            <?php foreach ($signers as $signer): ?>
+                                <option value="<?php echo (int) $signer['id']; ?>"><?php echo htmlspecialchars($signer['position'] . ' — ' . $signer['full_name']); ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                    <p class="form-hint">Опись на продление многократной рабочей визы: сотрудники, их паспорта и перечень прилагаемых документов.</p>
+                    <?php endif; ?>
                     <div class="form-footer">
                         <a href="employees.php" class="btn btn-link">Назад</a>
                         <button type="submit" class="btn btn-primary"><i class="ti ti-download"></i> Сформировать опись (.docx)</button>

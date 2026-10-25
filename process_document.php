@@ -12,7 +12,7 @@ requireLogin();
 
 $employeeId = (int) ($_GET['employee_id'] ?? $_POST['employee_id'] ?? 0);
 $document = $_GET['document'] ?? $_POST['document'] ?? '';
-$processType = 'invitation';
+$processType = processTypeOfDocument($document) ?? 'invitation';
 $db = getDb();
 
 $definition = PROCESS_TYPES[$processType]['documents'][$document] ?? null;
@@ -49,7 +49,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $readonly = $field[3] ?? false;
         $value = $readonly ? $defaults[$key] : trim($_POST['f'][$key] ?? '');
 
-        if ($key === 'gender' && !in_array($value, ['male', 'female', ''], true)) {
+        // Выбор из списка (пол, кратность и категория визы): только допустимые значения.
+        if (!empty($field[4]) && $value !== '' && !array_key_exists($value, $field[4])) {
             $value = $defaults[$key];
         }
 
@@ -63,8 +64,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     saveDocumentOverrides($db, $employeeId, $processType, $document, $overrides);
 
     if ($action === 'generate') {
-        $tmp = $document === 'petition' ? buildPetition($values) : buildGuaranteeLetter($values, $context['organization']);
-        docxSend($tmp, $definition['label'] . ' ' . employeeFullNameRu($context['employee']) . '.docx');
+        $tmp = match ($document) {
+            'petition' => buildPetition($values),
+            'guarantee_letter' => buildGuaranteeLetter($values, $context['organization']),
+            'visa_petition' => buildVisaPetition($values, $context['organization']),
+            'visa_questionnaire' => buildVisaQuestionnaire($values),
+        };
+        docxSend($tmp, ($definition['file_label'] ?? $definition['label']) . ' ' . employeeFullNameRu($context['employee']) . '.docx');
     }
 
     $notice = 'Изменения сохранены.';
@@ -100,7 +106,7 @@ function pe($value): string
 <div class="page-header d-print-none mb-3">
     <div>
         <div class="text-secondary"><a href="employee_form.php?id=<?php echo (int) $employee['id']; ?>#process"><?php echo pe(employeeFullNameRu($employee)); ?></a> / <?php echo pe(PROCESS_TYPES[$processType]['label']); ?></div>
-        <h2 class="page-title"><?php echo pe($definition['label']); ?></h2>
+        <h2 class="page-title"><?php echo pe($definition['file_label'] ?? $definition['label']); ?></h2>
     </div>
 </div>
 
@@ -108,8 +114,8 @@ function pe($value): string
     <div class="alert alert-success"><?php echo pe($notice); ?></div>
 <?php endif; ?>
 <?php if (!$context['organization']): ?>
-    <div class="alert alert-warning">У сотрудника не указана организация — реквизиты пустые<?php echo $document !== 'petition' ? ', бланк не применится' : ''; ?>.</div>
-<?php elseif ($document !== 'petition' && !letterheadPath($context['organization'])): ?>
+    <div class="alert alert-warning">У сотрудника не указана организация — реквизиты пустые<?php echo documentUsesLetterhead($document) ? ', бланк не применится' : ''; ?>.</div>
+<?php elseif (documentUsesLetterhead($document) && !letterheadPath($context['organization'])): ?>
     <div class="alert alert-info">У организации нет загруженного бланка — документ будет без оформления.</div>
 <?php endif; ?>
 <?php if (!$context['region']): ?>

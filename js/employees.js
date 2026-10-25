@@ -86,7 +86,8 @@ $(function () {
     }
 
     function documentsCell(employee) {
-        const base = 'process_document.php?employee_id=' + encodeURIComponent(employee.id) + '&document=';
+        const id = encodeURIComponent(employee.id);
+        const base = 'process_document.php?employee_id=' + id + '&document=';
 
         return '<td class="documents-cell" data-label="Документы">' +
             '<details class="doc-level" open><summary>' + escapeHtml(employee.region_name || 'Без региона') + '</summary>' +
@@ -96,6 +97,13 @@ $(function () {
             wordItem('Ходатайство', base + 'petition') +
             wordItem('Гарантийное письмо', base + 'guarantee_letter') +
             '<li class="doc-soon"><i class="ti ti-file-word doc-icon"></i>Доверенность<span class="doc-format">скоро</span></li>' +
+            '</ul></details>' +
+            '<details class="doc-level" open><summary>Виза</summary>' +
+            '<ul class="doc-list">' +
+            wordItem('Ходатайство', base + 'visa_petition') +
+            wordItem('Визовая анкета', base + 'visa_questionnaire') +
+            '<li class="doc-soon"><i class="ti ti-file-word doc-icon"></i>Доверенность<span class="doc-format">скоро</span></li>' +
+            wordItem('Опись', 'inventory.php?type=visa&ids=' + id) +
             '</ul></details></details></details></td>';
     }
 
@@ -298,8 +306,17 @@ $(function () {
         updateInventoryButton();
     });
 
-    $inventoryButton.on('click', function () {
-        window.location.href = 'inventory.php?ids=' + Array.from(selectedIds).join(',');
+    // Описи у процессов разные: тип выбирается в меню кнопки «Сформировать опись»,
+    // опись делается на отмеченных галочками сотрудников.
+    $('.dropdown-menu [data-inventory-type]').on('click', function (event) {
+        event.preventDefault();
+
+        if (selectedIds.size === 0) {
+            return;
+        }
+
+        window.location.href = 'inventory.php?type=' + encodeURIComponent($(this).data('inventory-type')) +
+            '&ids=' + Array.from(selectedIds).join(',');
     });
 
     $tableBody.on('click', '[data-delete]', function () {

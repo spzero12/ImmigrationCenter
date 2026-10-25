@@ -79,13 +79,29 @@ $errors = [];
 
 // Автосохранение (js/employee_autosave.js): тот же обработчик, но ответ — JSON,
 // файлы сканов не принимаются, документы не удаляются, аудит не чаще раза в 10 минут.
-$isAutosave = $_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['_autosave']);
+$isAutosave = $_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['autosave']);
 
 function autosaveResponse(array $payload): void
 {
+    // Случайный вывод (предупреждения PHP и т.п.) не должен ломать JSON.
+    while (ob_get_level() > 0) {
+        ob_end_clean();
+    }
+
     header('Content-Type: application/json; charset=utf-8');
     echo json_encode($payload, JSON_UNESCAPED_UNICODE);
     exit;
+}
+
+if ($isAutosave) {
+    ob_start();
+
+    // Любая ошибка сервера при автосохранении — JSON с причиной, а не страница-ошибка.
+    set_exception_handler(static function (Throwable $e): void {
+        error_log('employee_form autosave: ' . $e->getMessage());
+        http_response_code(500);
+        autosaveResponse(['ok' => false, 'errors' => ['Ошибка сервера: ' . mb_substr($e->getMessage(), 0, 200)]]);
+    });
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -509,14 +525,18 @@ function e($value): string
                     <div class="card-subtitle">Один документ каждого типа. Пустой блок — документа нет.</div>
                 </div>
                 <div class="card-body">
-                    <?php foreach (DOCUMENT_TYPES_ORDER as $type): $v = $documentValues[$type]; $doc = $documents[$type] ?? null; ?>
-                        <div class="mb-4 pb-3 border-bottom">
-                            <div class="d-flex align-items-center gap-2 mb-2">
-                                <h4 class="mb-0"><?php echo e(DOCUMENT_TYPE_LABELS[$type]); ?></h4>
+                    <?php foreach (DOCUMENT_TYPES_ORDER as $type): $v = $documentValues[$type]; $doc = $documents[$type] ?? null; $look = DOCUMENT_TYPE_LOOK[$type]; ?>
+                        <div class="doc-block" id="doc-<?php echo e($type); ?>" style="--doc-color: <?php echo e($look['color']); ?>;">
+                            <div class="doc-block-header">
+                                <span class="doc-block-icon"><i class="ti <?php echo e($look['icon']); ?>"></i></span>
+                                <h4 class="doc-block-title"><?php echo e(DOCUMENT_TYPE_LABELS[$type]); ?></h4>
                                 <?php if ($doc): $status = documentStatus($doc['expire_date']); ?>
                                     <span class="badge <?php echo $status['badgeClass']; ?>"><?php echo e($status['label']); ?></span>
+                                <?php else: ?>
+                                    <span class="badge bg-secondary-lt">Нет данных</span>
                                 <?php endif; ?>
                             </div>
+                            <div class="doc-block-body">
                             <div class="row">
                                 <div class="col-md-2 mb-2">
                                     <label class="form-label">Серия</label>
@@ -553,6 +573,7 @@ function e($value): string
                                         <div class="form-hint"><a href="document_scan.php?document_id=<?php echo (int) $doc['id']; ?>" target="_blank"><?php echo e($doc['scan_original_name']); ?></a> — загрузка нового файла заменит этот</div>
                                     <?php endif; ?>
                                 </div>
+                            </div>
                             </div>
                         </div>
                     <?php endforeach; ?>

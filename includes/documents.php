@@ -16,6 +16,17 @@ const DOCUMENT_TYPE_LABELS = [
     'dms' => 'ДМС',
 ];
 
+// Оформление блока документа в карточке: значок (Tabler Icons) и фирменный цвет типа.
+const DOCUMENT_TYPE_LOOK = [
+    'passport' => ['icon' => 'ti-id', 'color' => '#206bc4'],
+    'visa' => ['icon' => 'ti-plane-departure', 'color' => '#ae3ec9'],
+    'work_permit' => ['icon' => 'ti-briefcase', 'color' => '#2fb344'],
+    'work_patent' => ['icon' => 'ti-certificate', 'color' => '#f59f00'],
+    'registration' => ['icon' => 'ti-home-check', 'color' => '#d6336c'],
+    'medical_certificate' => ['icon' => 'ti-stethoscope', 'color' => '#0ca678'],
+    'dms' => ['icon' => 'ti-shield-check', 'color' => '#4263eb'],
+];
+
 // Порядок блоков документов в карточке сотрудника.
 const DOCUMENT_TYPES_ORDER = ['passport', 'visa', 'work_permit', 'work_patent', 'registration', 'medical_certificate', 'dms'];
 
@@ -38,6 +49,8 @@ const DOCUMENT_TYPE_EXTRA_FIELDS = [
     'visa' => [
         'visa_category' => 'Категория визы',
         'visa_multiplicity' => 'Кратность',
+        'visa_identifier' => 'Идентификатор визы',
+        'invitation_number' => '№ приглашения',
     ],
     'work_patent' => [
         'profession' => 'Профессия',

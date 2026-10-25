@@ -1,8 +1,8 @@
 <?php
 
-// Процессы оформления документов. Пока один процесс — "Приглашение".
+// Процессы оформления документов: «Приглашение» и «Виза» (продление визы).
 // Опись — групповой документ (несколько сотрудников из таблицы), в состав
-// процесса не входит.
+// процесса не входит; у каждого процесса своя форма описи (INVENTORY_TYPES).
 //
 // Каждый документ процесса открывается на своей странице
 // (process_document.php): поля предзаполняются из карточки сотрудника и
@@ -24,6 +24,54 @@ const PROCESS_TYPES = [
             'power_of_attorney' => ['label' => 'Доверенность', 'available' => false],
         ],
     ],
+    'visa' => [
+        'label' => 'Виза',
+        'documents' => [
+            'visa_petition' => ['label' => 'Ходатайство', 'file_label' => 'Ходатайство на визу', 'available' => true],
+            'visa_questionnaire' => ['label' => 'Визовая анкета', 'available' => true],
+            'visa_power_of_attorney' => ['label' => 'Доверенность', 'available' => false],
+        ],
+    ],
+];
+
+// Формы описи — по процессам. Ходатайства на приглашение и на визу, как и описи,
+// разные: при формировании описи выбирается нужная.
+const INVENTORY_TYPES = [
+    'invitation' => ['label' => 'Опись на приглашение', 'description' => 'Справка и опись документов, принятых к рассмотрению (приложение № 2 к инструкции МВД)'],
+    'visa' => ['label' => 'Опись на визу', 'description' => 'Опись документов, подаваемых в УВМ на продление визы'],
+];
+
+// Процесс, к которому относится документ ('petition' → 'invitation', 'visa_petition' → 'visa').
+function processTypeOfDocument(string $document): ?string
+{
+    foreach (PROCESS_TYPES as $type => $definition) {
+        if (isset($definition['documents'][$document])) {
+            return $type;
+        }
+    }
+
+    return null;
+}
+
+// Документы, которые печатаются на бланке организации (остальные — установленные
+// формы МВД, выдаются без бланка).
+function documentUsesLetterhead(string $document): bool
+{
+    return in_array($document, ['guarantee_letter', 'visa_petition'], true);
+}
+
+// Пол и параметры визы — выбор из списка: в документе отмечаются клетки «X».
+const CHOICE_GENDER = ['male' => 'М', 'female' => 'Ж'];
+
+const VISA_CATEGORY_LABELS = [
+    'private' => 'частная',
+    'humanitarian' => 'гуманитарная',
+    'business' => 'деловая',
+    'work' => 'рабочая',
+    'tourist' => 'туристическая',
+    'tourist_group' => 'туристическая групповая',
+    'study' => 'учебная',
+    'reception' => 'на въезд в целях приёма в гражданство',
 ];
 
 // Параметры поездки в образце ходатайства набраны чёрным (не красным) —
@@ -98,7 +146,7 @@ function documentFieldDefinitions(string $document): array
             'first_name_lat' => ['3.4. Имя лат.', 'text', 'Приглашаемый'],
             'middle_name' => ['3.5. Отчество рус.', 'text', 'Приглашаемый'],
             'middle_name_lat' => ['3.6. Отчество лат.', 'text', 'Приглашаемый'],
-            'gender' => ['3.7. Пол', 'select', 'Приглашаемый'],
+            'gender' => ['3.7. Пол', 'select', 'Приглашаемый', false, CHOICE_GENDER],
             'birth_date' => ['3.8. Дата рождения', 'date', 'Приглашаемый'],
             'birth_country' => ['3.9. Государство рождения', 'text', 'Приглашаемый'],
             'birth_place' => ['3.10. Место рождения', 'text', 'Приглашаемый'],
@@ -127,7 +175,111 @@ function documentFieldDefinitions(string $document): array
         ];
     }
 
+    if ($document === 'visa_petition') {
+        $trip = 'Сведения о ходатайстве';
+        $person = 'Иностранный гражданин';
+
+        return [
+            'document_date' => ['Дата', 'date', 'Документ'],
+            'region_dative' => ['УВМ ГУ МВД России по … (из региона сотрудника)', 'text', 'Документ', true],
+            'org_name_genitive' => ['От … (наименование организации в родительном падеже)', 'text', $org],
+            'org_inn' => ['ИНН', 'text', $org],
+            'org_address_phone' => ['Адрес и телефон', 'text', $org],
+            'visa_until' => ['Прошу продлить визу до', 'date', $trip],
+            'last_name' => ['Фамилия рус.', 'text', $person],
+            'last_name_lat' => ['Фамилия лат.', 'text', $person],
+            'first_name' => ['Имя рус.', 'text', $person],
+            'first_name_lat' => ['Имя лат.', 'text', $person],
+            'middle_name' => ['Отчество рус.', 'text', $person],
+            'middle_name_lat' => ['Отчество лат.', 'text', $person],
+            'birth_date' => ['Дата рождения', 'date', $person],
+            'citizenship' => ['Гражданство', 'text', $person],
+            'gender' => ['Пол', 'select', $person, false, CHOICE_GENDER],
+            'passport_series' => ['Паспорт: серия', 'text', 'Документ, удостоверяющий личность'],
+            'passport_number' => ['Паспорт: номер', 'text', 'Документ, удостоверяющий личность'],
+            'passport_issue_date' => ['Паспорт: срок действия с', 'date', 'Документ, удостоверяющий личность'],
+            'passport_expire_date' => ['Паспорт: срок действия по', 'date', 'Документ, удостоверяющий личность'],
+            'visa_series' => ['Виза: серия бланка', 'text', 'Сведения о визе'],
+            'visa_number' => ['Виза: номер', 'text', 'Сведения о визе'],
+            'visa_issue_date' => ['Виза: срок действия с', 'date', 'Сведения о визе'],
+            'visa_expire_date' => ['Виза: срок действия по', 'date', 'Сведения о визе'],
+            'visa_reason' => ['В связи с', 'text', $trip],
+            'entry_date' => ['Дата въезда', 'date', $trip],
+            'entry_checkpoint' => ['КПП въезда', 'text', $trip],
+            'signer_position' => ['Должность', 'text', $signer],
+            'signer_name' => ['ФИО подписанта', 'text', $signer],
+        ];
+    }
+
+    if ($document === 'visa_questionnaire') {
+        $kind = 'Вид визы';
+        $person = 'О заявителе';
+        $parties = 'Стороны, адреса, маршрут';
+
+        return [
+            'visa_multiplicity' => ['Кратность визы', 'select', $kind, false, VISA_MULTIPLICITY_LABELS],
+            'visa_category' => ['Категория (вид) визы', 'select', $kind, false, VISA_CATEGORY_LABELS],
+            'visa_reason' => ['В связи с', 'text', $kind],
+            'last_name' => ['1. Фамилия рус.', 'text', $person],
+            'last_name_lat' => ['1. Фамилия лат.', 'text', $person],
+            'first_name' => ['2. Имя рус.', 'text', $person],
+            'first_name_lat' => ['2. Имя лат.', 'text', $person],
+            'middle_name' => ['3. Отчество рус.', 'text', $person],
+            'middle_name_lat' => ['3. Отчество лат.', 'text', $person],
+            'birth_date' => ['4. Дата рождения', 'date', $person],
+            'birth_place' => ['5. Место рождения (страна, город)', 'text', $person],
+            'gender' => ['6. Пол', 'select', $person, false, CHOICE_GENDER],
+            'citizenship' => ['7. Гражданство', 'text', $person],
+            'passport_series' => ['8. Паспорт: серия', 'text', $person],
+            'passport_number' => ['8. Паспорт: номер', 'text', $person],
+            'passport_issue_date' => ['8. Паспорт: срок действия с', 'date', $person],
+            'passport_expire_date' => ['8. Паспорт: срок действия по', 'date', $person],
+            'inviting_party' => ['9. Сведения о приглашающей стороне', 'text', $parties],
+            'receiving_party' => ['10. Принимающая сторона: наименование, ИНН', 'text', $parties],
+            'receiving_address' => ['10. Принимающая сторона: адрес', 'text', $parties],
+            'registration_address' => ['11. Адрес постановки на миграционный учёт', 'text', $parties],
+            'route' => ['12. Маршрут предполагаемого пребывания', 'text', $parties],
+            'home_address' => ['13. Адрес в стране постоянного проживания', 'text', $parties],
+            'workplace' => ['14. Место работы или учёбы, должность', 'text', $parties],
+            'visa_series' => ['Имеющаяся виза: серия бланка', 'text', 'Сведения об имеющейся визе'],
+            'visa_number' => ['Имеющаяся виза: номер', 'text', 'Сведения об имеющейся визе'],
+            'visa_identifier' => ['Идентификатор визы', 'text', 'Сведения об имеющейся визе'],
+            'visa_issue_date' => ['Имеющаяся виза: срок действия с', 'date', 'Сведения об имеющейся визе'],
+            'visa_expire_date' => ['Имеющаяся виза: срок действия по', 'date', 'Сведения об имеющейся визе'],
+            'invitation_number' => ['№ приглашения', 'text', 'Сведения об имеющейся визе'],
+            'document_date' => ['Дата', 'date', 'Документ'],
+        ];
+    }
+
     return [];
+}
+
+// Поля-выборы документа: ключ => [значение => подпись] (в docx — клетки «X»).
+function documentChoiceFields(array $definitions): array
+{
+    $choices = [];
+
+    foreach ($definitions as $key => $field) {
+        if (!empty($field[4])) {
+            $choices[$key] = $field[4];
+        }
+    }
+
+    return $choices;
+}
+
+// Значения {поле}_{вариант} = 'X' для выбранного варианта (шаблоны .docx).
+function choiceMarks(array $values, array $definitions): array
+{
+    $marks = [];
+
+    foreach (documentChoiceFields($definitions) as $key => $options) {
+        foreach ($options as $option => $label) {
+            $marks[$key . '_' . $option] = ($values[$key] ?? '') === (string) $option ? 'X' : '';
+        }
+    }
+
+    return $marks;
 }
 
 // Всё, что нужно для формирования документов сотрудника: карточка,
@@ -164,10 +316,19 @@ function loadEmployeeContext(PDO $db, int $employeeId): ?array
         $region = $regionStmt->fetch() ?: null;
     }
 
+    $workSite = null;
+
+    if (!empty($employee['work_site_id'])) {
+        $siteStmt = $db->prepare('SELECT * FROM work_sites WHERE id = ?');
+        $siteStmt->execute([$employee['work_site_id']]);
+        $workSite = $siteStmt->fetch() ?: null;
+    }
+
     return [
         'employee' => $employee,
         'organization' => $organization,
         'region' => $region,
+        'work_site' => $workSite,
         'signers' => $signers,
         'documents' => getEmployeeDocumentsByType($db, $employeeId),
         'stay_address' => json_decode($employee['stay_address'] ?? '', true) ?: [],
@@ -251,6 +412,14 @@ function documentDefaults(string $document, array $context, ?array $signer = nul
     $a = $context['stay_address'];
     $signer = $signer ?? defaultSigner($context);
     $orgFullName = organizationDisplayName($context['organization']);
+    $visa = $context['documents']['visa'] ?? [];
+    $visaExtra = json_decode($visa['extra_fields'] ?? '', true) ?: [];
+    $registration = $context['documents']['registration'] ?? [];
+    $registrationExtra = json_decode($registration['extra_fields'] ?? '', true) ?: [];
+    $workSite = $context['work_site'] ?? [];
+    $upper = static fn(string $value): string => mb_strtoupper($value);
+    $join = static fn(array $parts): string => implode(', ', array_filter(array_map('trim', $parts), static fn($part) => $part !== ''));
+    $orgPhone = (string) ($o['phone'] ?? '');
 
     $all = [
         'document_date' => date('Y-m-d'),
@@ -301,7 +470,47 @@ function documentDefaults(string $document, array $context, ?array $signer = nul
         'signer_position' => $signer['position'] ?? '',
         'signer_name' => $signer['full_name'] ?? '',
         'signer_short' => $signer['short_name'] ?? '',
+        // Процесс «Виза»
+        'org_name_genitive' => organizationNameGenitive($orgFullName),
+        'org_address_phone' => $join([$o['legal_address'] ?? '', $orgPhone]),
+        'visa_until' => '',
+        'visa_series' => $visa['series'] ?? '',
+        'visa_number' => $visa['number'] ?? '',
+        'visa_issue_date' => $visa['issue_date'] ?? '',
+        'visa_expire_date' => $visa['expire_date'] ?? '',
+        'visa_identifier' => $visaExtra['visa_identifier'] ?? '',
+        'invitation_number' => $visaExtra['invitation_number'] ?? '',
+        'visa_multiplicity' => visaMultiplicityFromText((string) ($visaExtra['visa_multiplicity'] ?? '')),
+        'visa_category' => visaCategoryFromText((string) ($visaExtra['visa_category'] ?? '')),
+        'visa_reason' => $document === 'visa_questionnaire' ? 'Заключением трудового договора' : 'Трудовая деятельность',
+        'entry_date' => '',
+        'entry_checkpoint' => '',
+        'inviting_party' => $join([$o['name'] ?? '', ($o['inn'] ?? '') !== '' ? 'ИНН ' . $o['inn'] : '', $o['legal_address'] ?? '', $orgPhone, $o['email'] ?? '']),
+        'receiving_party' => $registrationExtra['registering_party'] ?? $join([$o['name'] ?? '', ($o['inn'] ?? '') !== '' ? 'ИНН ' . $o['inn'] : '']),
+        'receiving_address' => $registrationExtra['address'] ?? ($workSite['address'] ?? stayAddressLine($a)),
+        'registration_address' => $registrationExtra['address'] ?? stayAddressLine($a),
+        'route' => $a['locality'] ?? '',
+        'home_address' => $upper($join([$e['residence_country'] ?? '' ?: ($e['birth_country'] ?? ''), $e['birth_place'] ?? ''])),
+        'workplace' => $join([$o['name'] ?? '', $upper((string) ($e['position'] ?? '')), $workSite['address'] ?? ($o['actual_address'] ?? ''), $orgPhone]),
     ];
+
+    // Анкета: место рождения «страна, город» одной строкой; без отчества — «нет».
+    if ($document === 'visa_questionnaire') {
+        $all['birth_place'] = $upper($join([$e['birth_country'] ?? '', $e['birth_place'] ?? '']));
+    }
+
+    // В визовых документах отсутствующие фамилия / отчество пишутся как в образцах.
+    if (in_array($document, ['visa_petition', 'visa_questionnaire'], true)) {
+        foreach (['last_name', 'last_name_lat'] as $key) {
+            $all[$key] = $all[$key] !== '' ? $all[$key] : '-';
+        }
+    }
+
+    if ($document === 'visa_questionnaire') {
+        foreach (['middle_name', 'middle_name_lat'] as $key) {
+            $all[$key] = $all[$key] !== '' ? $all[$key] : 'нет';
+        }
+    }
 
     return array_intersect_key($all, documentFieldDefinitions($document));
 }
@@ -420,6 +629,130 @@ function buildInventory(array $contexts, array $header, ?array $organization, ?a
     ];
 
     return docxFromTemplate('inventory', $values, letterheadPath($organization), $rows);
+}
+
+// «Общество с ограниченной ответственностью "…"» → «Общества с …» (для «От …» в ходатайстве).
+function organizationNameGenitive(string $name): string
+{
+    $forms = [
+        'Общество с ограниченной ответственностью' => 'Общества с ограниченной ответственностью',
+        'Общество с дополнительной ответственностью' => 'Общества с дополнительной ответственностью',
+        'Непубличное акционерное общество' => 'Непубличного акционерного общества',
+        'Публичное акционерное общество' => 'Публичного акционерного общества',
+        'Закрытое акционерное общество' => 'Закрытого акционерного общества',
+        'Открытое акционерное общество' => 'Открытого акционерного общества',
+        'Акционерное общество' => 'Акционерного общества',
+        'Индивидуальный предприниматель' => 'Индивидуального предпринимателя',
+        'Муниципальное унитарное предприятие' => 'Муниципального унитарного предприятия',
+        'Государственное унитарное предприятие' => 'Государственного унитарного предприятия',
+    ];
+
+    foreach ($forms as $nominative => $genitive) {
+        if (mb_stripos($name, $nominative) === 0) {
+            return $genitive . mb_substr($name, mb_strlen($nominative));
+        }
+    }
+
+    return $name;
+}
+
+// Кратность и категорию визы в карточке вводят текстом (доп. поля документа «Виза»).
+function visaMultiplicityFromText(string $text): string
+{
+    $text = mb_strtolower($text);
+
+    return match (true) {
+        str_contains($text, 'двукр') => 'double',
+        str_contains($text, 'одно') => 'single',
+        default => 'multiple',
+    };
+}
+
+function visaCategoryFromText(string $text): string
+{
+    $text = mb_strtolower($text);
+
+    return match (true) {
+        str_contains($text, 'групп') => 'tourist_group',
+        str_contains($text, 'тур') => 'tourist',
+        str_contains($text, 'гуман') => 'humanitarian',
+        str_contains($text, 'дел') => 'business',
+        str_contains($text, 'учеб') => 'study',
+        str_contains($text, 'част') => 'private',
+        str_contains($text, 'прием') || str_contains($text, 'приём') => 'reception',
+        default => 'work',
+    };
+}
+
+// Общее для визовых документов: даты через «/», ФИО, гражданство и места — заглавными.
+function visaDocumentValues(array $v, string $document, array $upperKeys): array
+{
+    $values = $v;
+    $definitions = documentFieldDefinitions($document);
+
+    foreach ($definitions as $key => $field) {
+        if ($field[1] === 'date') {
+            $values[$key] = slashDate($v[$key] ?? '');
+        }
+    }
+
+    foreach ($upperKeys as $key) {
+        $value = (string) ($v[$key] ?? '');
+        // «нет» (нет отчества) и «-» в образцах пишутся как есть.
+        $values[$key] = mb_strtolower(trim($value)) === 'нет' ? $value : mb_strtoupper($value);
+    }
+
+    return $values + choiceMarks($v, $definitions);
+}
+
+// Ходатайство на продление визы — на бланке организации (в образце: «на бланке компании»).
+function buildVisaPetition(array $v, ?array $organization): string
+{
+    $values = visaDocumentValues($v, 'visa_petition', [
+        'last_name', 'last_name_lat', 'first_name', 'first_name_lat', 'middle_name', 'middle_name_lat', 'citizenship',
+    ]);
+    // Адрес и телефон — на двух линиях образца (первая вместе с ИНН).
+    [$values['org_address_phone_1'], $values['org_address_phone_2']] = addressLines((string) $v['org_address_phone'], 29.6);
+
+    return docxFromTemplate('visa_petition', $values, letterheadPath($organization));
+}
+
+// Визовая анкета — установленная форма, без бланка.
+function buildVisaQuestionnaire(array $v): string
+{
+    $values = visaDocumentValues($v, 'visa_questionnaire', [
+        'last_name', 'last_name_lat', 'first_name', 'first_name_lat', 'middle_name', 'middle_name_lat',
+        'citizenship', 'birth_place', 'home_address',
+    ]);
+    [$values['inviting_party_1'], $values['inviting_party_2']] = addressLines((string) $v['inviting_party'], 26.0);
+    [$values['route_1'], $values['route_2']] = addressLines((string) $v['route'], 19.0);
+    [$values['workplace_1'], $values['workplace_2']] = addressLines((string) $v['workplace'], 24.5);
+
+    return docxFromTemplate('visa_questionnaire', $values);
+}
+
+// Опись на продление визы — для нескольких сотрудников; $header: signer_position, signer_name.
+function buildVisaInventory(array $contexts, array $header, ?array $organization, ?array $region): string
+{
+    $rows = [];
+
+    foreach ($contexts as $c) {
+        $e = $c['employee'];
+        $rows[] = [
+            'citizenship' => mb_strtoupper((string) $e['citizenship']),
+            'full_name' => mb_strtoupper(trim(($e['last_name'] !== '-' ? $e['last_name'] : '') . ' ' . $e['first_name'])),
+            'passport' => passportNumber($c),
+        ];
+    }
+
+    $values = [
+        'region_dative' => $region['name_dative'] ?? '',
+        'org_short_name' => $organization['name'] ?? '',
+        'signer_position' => $header['signer_position'] !== '' ? $header['signer_position'] : 'Генеральный директор',
+        'signer_name' => $header['signer_name'],
+    ];
+
+    return docxFromTemplate('visa_inventory', $values, letterheadPath($organization), $rows);
 }
 
 // Адрес в гарантийном письме пишется на двух линиях бланка. Делим по словам:

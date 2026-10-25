@@ -296,3 +296,50 @@
 .autosave-saving { background: #206bc4; }
 .autosave-unsaved { background: #6b7280; }
 .autosave-error { background: #d63939; }
+
+/* Блоки документов в карточке сотрудника: каждый тип — отдельная рамка с цветной
+   полосой, значком и крупным названием (цвет и значок — DOCUMENT_TYPE_LOOK). */
+.doc-block {
+    --doc-color: #206bc4;
+    margin-bottom: 1.25rem;
+    border: 1px solid var(--tblr-border-color, #dfe3e8);
+    border-left: 5px solid var(--doc-color);
+    border-radius: 0.5rem;
+    background: var(--tblr-bg-surface, #fff);
+    box-shadow: 0 1px 3px rgba(31, 41, 55, 0.08);
+    overflow: hidden;
+}
+
+.doc-block:last-child { margin-bottom: 0; }
+
+.doc-block-header {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.65rem 1rem;
+    background: color-mix(in srgb, var(--doc-color) 12%, transparent);
+    border-bottom: 1px solid color-mix(in srgb, var(--doc-color) 30%, transparent);
+}
+
+.doc-block-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.25rem;
+    height: 2.25rem;
+    border-radius: 50%;
+    background: var(--doc-color);
+    color: #fff;
+    font-size: 1.25rem;
+}
+
+.doc-block-title {
+    margin: 0;
+    font-size: 1.15rem;
+    font-weight: 700;
+    color: var(--doc-color);
+}
+
+.doc-block-body { padding: 1rem 1rem 0.5rem; }
+
+.card-header .card-title + .card-subtitle { margin: 0 0 0 0.75rem; }

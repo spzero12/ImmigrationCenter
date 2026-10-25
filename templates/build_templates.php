@@ -7,7 +7,8 @@
 //
 //   php templates/build_templates.php
 //
-// Результат: templates/processes/{petition,guarantee_letter,inventory}.docx.
+// Результат: templates/processes/{petition,guarantee_letter,inventory,
+// visa_petition,visa_questionnaire,visa_inventory}.docx.
 // Подстановка значений — includes/docx_template.php.
 
 const W_NS = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
@@ -112,6 +113,115 @@ $templates = [
         ],
         'keep_first_data_row' => true,
     ],
+    // Процесс «Виза» (продление визы). Ходатайство — на бланке компании (красная
+    // пометка образца «НА БЛАНКЕ КОМПАНИИ» убирается, бланк подставляется из организации).
+    'visa_petition' => [
+        'source' => 'Ходатайство на визу.docx',
+        'map' => [
+            0 => ['text' => ''],
+            4 => ['replace' => ['Московской области', '${region_dative}']],
+            8 => ['groups' => ['${org_name_genitive}']],
+            10 => ['groups' => ['${org_inn}', '${org_address_phone_1}']],
+            12 => ['groups' => ['${org_address_phone_2}']],
+            15 => ['groups' => ['${visa_until} ']],
+            18 => ['groups' => ['${last_name}']],
+            20 => ['groups' => ['${last_name_lat}']],
+            27 => ['groups' => ['${first_name}']],
+            29 => ['groups' => ['${first_name_lat}']],
+            36 => ['insert' => '${middle_name}', 'like' => 27],
+            38 => ['insert' => '${middle_name_lat}', 'like' => 29],
+            45 => ['groups' => ['${birth_date}']],
+            47 => ['groups' => ['${citizenship}']],
+            49 => ['groups' => ['${gender_male}']],
+            51 => ['insert' => '${gender_female}', 'like' => 49],
+            62 => ['insert' => '${passport_series}', 'like' => 64],
+            64 => ['groups' => ['${passport_number}']],
+            66 => ['groups' => ['${passport_issue_date}']],
+            68 => ['groups' => ['${passport_expire_date}']],
+            79 => ['groups' => ['${visa_series}']],
+            81 => ['groups' => ['${visa_number}']],
+            83 => ['groups' => ['${visa_issue_date}']],
+            85 => ['groups' => ['${visa_expire_date}']],
+            94 => ['groups' => ['${visa_reason}']],
+            97 => ['groups' => ['${entry_date}, КПП ${entry_checkpoint}']],
+            101 => ['groups' => ['${document_date}']],
+            103 => ['rules' => [
+                ['replace' => ['Генеральный директор', '${signer_position}']],
+                ['groups' => ['${signer_name}']],
+            ]],
+        ],
+    ],
+    // Визовая анкета — установленная форма (приказ МВД/ФСБ/МИД № 233/235/7018), без бланка.
+    'visa_questionnaire' => [
+        'source' => 'Визовая анкета.docx',
+        'map' => [
+            // Кратность визы (клетки слева от подписей).
+            15 => ['insert' => '${visa_multiplicity_single}', 'like' => 18],
+            32 => ['insert' => '${visa_multiplicity_double}', 'like' => 18],
+            44 => ['text' => '${visa_multiplicity_multiple}'],
+            // Категория (вид) визы.
+            21 => ['insert' => '${visa_category_private}', 'like' => 18],
+            23 => ['insert' => '${visa_category_humanitarian}', 'like' => 18],
+            25 => ['insert' => '${visa_category_business}', 'like' => 18],
+            27 => ['text' => '${visa_category_work}'],
+            35 => ['insert' => '${visa_category_tourist}', 'like' => 18],
+            37 => ['insert' => '${visa_category_tourist_group}', 'like' => 18],
+            39 => ['insert' => '${visa_category_study}', 'like' => 18],
+            47 => ['insert' => '${visa_category_reception}', 'like' => 18],
+            63 => ['replace' => ['Заключением трудового договора', '${visa_reason}']],
+            69 => ['groups' => ['${last_name}']],
+            71 => ['groups' => ['${last_name_lat}']],
+            77 => ['groups' => ['${first_name}']],
+            79 => ['groups' => ['${first_name_lat}']],
+            85 => ['text' => '${middle_name}'],
+            87 => ['text' => '${middle_name_lat}'],
+            94 => ['groups' => ['${birth_date}']],
+            96 => ['groups' => ['${birth_place}']],
+            98 => ['groups' => ['${gender_male}']],
+            100 => ['insert' => '${gender_female}', 'like' => 98],
+            110 => ['groups' => ['${citizenship}']],
+            114 => ['insert' => '${passport_series}', 'like' => 116],
+            116 => ['groups' => ['${passport_number}']],
+            118 => ['groups' => ['${passport_issue_date}']],
+            120 => ['groups' => ['${passport_expire_date}']],
+            129 => ['groups' => ['${inviting_party_1}']],
+            131 => ['groups' => ['${inviting_party_2}']],
+            133 => ['groups' => ['${receiving_party}']],
+            135 => ['groups' => ['${receiving_address}']],
+            137 => ['groups' => ['${registration_address}']],
+            140 => ['groups' => ['${route_1}']],
+            142 => ['groups' => ['${route_2}']],
+            144 => ['groups' => ['${home_address}']],
+            148 => ['groups' => ['${workplace_1}']],
+            150 => ['groups' => ['${workplace_2}']],
+            182 => ['groups' => ['${visa_series}']],
+            184 => ['groups' => ['${visa_number}']],
+            186 => ['groups' => ['${visa_identifier}']],
+            188 => ['groups' => ['${visa_issue_date}']],
+            190 => ['groups' => ['${visa_expire_date}']],
+            192 => ['groups' => ['${invitation_number}']],
+            221 => ['groups' => ['${document_date}']],
+        ],
+    ],
+    // Опись документов, подаваемых на продление визы (несколько сотрудников).
+    'visa_inventory' => [
+        'source' => 'Опись на визу.docx',
+        'map' => [
+            9 => ['replace' => ['Московской области', '${region_dative}']],
+            12 => ['groups' => ['${org_short_name} ']],
+            21 => ['groups' => ['${citizenship}']],
+            22 => ['groups' => ['${full_name}']],
+            23 => ['groups' => ['${passport}']],
+            63 => ['replace' => ['Генеральный директор', '${signer_position}']],
+            // Линия подписи короче, чтобы «ООО "…"» заглавными и ФИО уместились в строку.
+            64 => ['rules' => [
+                ['replace' => ['____________', '____']],
+                ['groups' => ['${org_short_name}', '${signer_name}']],
+            ]],
+        ],
+        'keep_first_data_row' => true,
+    ],
+
 ];
 
 function xp(DOMDocument $d): DOMXPath
@@ -214,8 +324,11 @@ function transform(string $xml, array $map, bool $keepFirstDataRow, float $fitTa
     $x = xp($d);
     $paragraphs = iterator_to_array($x->query('//w:p'));
 
-    foreach ($map as $index => $rule) {
+    foreach ($map as $index => $ruleSet) {
         $p = $paragraphs[$index] ?? throw new RuntimeException("Нет абзаца $index");
+
+        // Несколько правил на один абзац: ['rules' => [правило1, правило2]].
+        foreach ($ruleSet['rules'] ?? [$ruleSet] as $rule) {
         $like = isset($rule['like']) ? $paragraphs[$rule['like']] : null;
 
         if (isset($rule['groups'])) {
@@ -322,6 +435,7 @@ function transform(string $xml, array $map, bool $keepFirstDataRow, float $fitTa
             if (!$done) {
                 throw new RuntimeException("Абзац $index: нет текста «$from»");
             }
+        }
         }
     }
 

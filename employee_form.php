@@ -1,30 +1,51 @@
 <?php
 
+// Единая карточка сотрудника: личные данные, документы (по одному каждого
+// типа, без версий) и процессы оформления — на одной странице.
+// Спецификация: .agent-os/specs/2026-10-04-employee-card-processes/spec.md
+
 require __DIR__ . '/includes/auth.php';
 require_once __DIR__ . '/includes/documents.php';
 require_once __DIR__ . '/includes/audit.php';
 require_once __DIR__ . '/includes/organizations.php';
+require_once __DIR__ . '/includes/regions.php';
+require_once __DIR__ . '/includes/work_sites.php';
+require_once __DIR__ . '/includes/scans.php';
+require_once __DIR__ . '/includes/processes.php';
 requireLogin();
 
-$employee = [
-    'id' => null,
-    'last_name' => '',
-    'first_name' => '',
-    'middle_name' => '',
-    'citizenship' => '',
-    'birth_date' => '',
-    'organization_id' => null,
-    'position' => '',
-    'department_id' => null,
-    'phone' => '',
-    'email' => '',
-    'notes' => '',
+const EMPLOYEE_TEXT_FIELDS = [
+    'last_name', 'first_name', 'middle_name', 'citizenship',
+    'last_name_lat', 'first_name_lat', 'middle_name_lat',
+    'birth_country', 'birth_place', 'residence_country',
+    'visa_country', 'visa_city', 'foreign_workplace',
+    'position', 'irs_number', 'phone', 'email', 'notes',
 ];
 
+const STAY_ADDRESS_FIELDS = [
+    'region' => 'Область, край, республика',
+    'district' => 'Район',
+    'locality' => 'Населённый пункт',
+    'street' => 'Улица',
+    'house' => 'Дом',
+    'corpus' => 'Корпус',
+    'building' => 'Строение',
+    'flat' => 'Квартира',
+    'phone' => 'Телефон по месту пребывания',
+];
+
+$employee = ['id' => null, 'organization_id' => null, 'department_id' => null, 'region_id' => null, 'work_site_id' => null, 'birth_date' => '', 'gender' => ''];
+
+foreach (EMPLOYEE_TEXT_FIELDS as $field) {
+    $employee[$field] = '';
+}
+
+$stayAddress = array_fill_keys(array_keys(STAY_ADDRESS_FIELDS), '');
 $isEdit = isset($_GET['id']);
+$db = getDb();
 
 if ($isEdit) {
-    $stmt = getDb()->prepare('SELECT * FROM employees WHERE id = ?');
+    $stmt = $db->prepare('SELECT * FROM employees WHERE id = ?');
     $stmt->execute([(int) $_GET['id']]);
     $found = $stmt->fetch();
 
@@ -34,45 +55,96 @@ if ($isEdit) {
     }
 
     $employee = $found;
+    $stayAddress = array_merge($stayAddress, json_decode($found['stay_address'] ?? '', true) ?: []);
 }
 
-$employeeDocuments = [];
-$passportNumbersById = [];
+$documents = $isEdit ? getEmployeeDocumentsByType($db, (int) $employee['id']) : [];
 
-if ($isEdit) {
-    $docsStmt = getDb()->prepare('SELECT * FROM employee_documents WHERE employee_id = ? ORDER BY expire_date IS NULL, expire_date ASC');
-    $docsStmt->execute([$employee['id']]);
-    $employeeDocuments = $docsStmt->fetchAll();
+// Текущие значения форм документов (при ошибке валидации — введённые).
+$documentValues = [];
 
-    foreach ($employeeDocuments as $doc) {
-        if ($doc['type'] === 'passport') {
-            $passportNumbersById[$doc['id']] = $doc['number'];
-        }
+foreach (DOCUMENT_TYPES_ORDER as $type) {
+    $doc = $documents[$type] ?? [];
+    $documentValues[$type] = [
+        'number' => $doc['number'] ?? '',
+        'series' => $doc['series'] ?? '',
+        'issue_date' => $doc['issue_date'] ?? '',
+        'expire_date' => $doc['expire_date'] ?? '',
+        'issued_by' => $doc['issued_by'] ?? '',
+        'extra' => json_decode($doc['extra_fields'] ?? '', true) ?: [],
+    ];
+}
+
+$errors = [];
+
+// Автосохранение (js/employee_autosave.js): тот же обработчик, но ответ — JSON,
+// файлы сканов не принимаются, документы не удаляются, аудит не чаще раза в 10 минут.
+$isAutosave = $_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['autosave']);
+
+function autosaveResponse(array $payload): void
+{
+    // Случайный вывод (предупреждения PHP и т.п.) не должен ломать JSON.
+    while (ob_get_level() > 0) {
+        ob_end_clean();
     }
+
+    header('Content-Type: application/json; charset=utf-8');
+    echo json_encode($payload, JSON_UNESCAPED_UNICODE);
+    exit;
 }
 
-$error = null;
+if ($isAutosave) {
+    ob_start();
+
+    // Любая ошибка сервера при автосохранении — JSON с причиной, а не страница-ошибка.
+    set_exception_handler(static function (Throwable $e): void {
+        error_log('employee_form autosave: ' . $e->getMessage());
+        http_response_code(500);
+        autosaveResponse(['ok' => false, 'errors' => ['Ошибка сервера: ' . mb_substr($e->getMessage(), 0, 200)]]);
+    });
+}
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $employee['last_name'] = trim($_POST['last_name'] ?? '');
-    $employee['first_name'] = trim($_POST['first_name'] ?? '');
-    $employee['middle_name'] = trim($_POST['middle_name'] ?? '');
-    $employee['citizenship'] = trim($_POST['citizenship'] ?? '');
+    foreach (EMPLOYEE_TEXT_FIELDS as $field) {
+        $employee[$field] = trim($_POST[$field] ?? '');
+    }
+
     $employee['birth_date'] = $_POST['birth_date'] ?: null;
+    $employee['gender'] = in_array($_POST['gender'] ?? '', ['male', 'female'], true) ? $_POST['gender'] : null;
     $employee['organization_id'] = (int) ($_POST['organization_id'] ?? 0) ?: null;
-    $employee['position'] = trim($_POST['position'] ?? '');
     $employee['department_id'] = (int) ($_POST['department_id'] ?? 0) ?: null;
-    $employee['phone'] = trim($_POST['phone'] ?? '');
-    $employee['email'] = trim($_POST['email'] ?? '');
-    $employee['notes'] = trim($_POST['notes'] ?? '');
+    $employee['region_id'] = (int) ($_POST['region_id'] ?? 0) ?: null;
+    $employee['work_site_id'] = (int) ($_POST['work_site_id'] ?? 0) ?: null;
 
-    // full_name — производное значение, собирается из частей ниже, а не
-    // вводится напрямую (единый источник данных, см. спецификацию фичи
-    // document-generation) — существующий код (список, поиск, api/*)
-    // продолжает читать full_name как раньше.
+    foreach (STAY_ADDRESS_FIELDS as $key => $label) {
+        $stayAddress[$key] = trim($_POST['stay_address'][$key] ?? '');
+    }
+
+    foreach (DOCUMENT_TYPES_ORDER as $type) {
+        $post = $_POST['documents'][$type] ?? [];
+        $extra = [];
+
+        foreach (array_keys(DOCUMENT_TYPE_EXTRA_FIELDS[$type]) as $key) {
+            $value = trim($post['extra'][$key] ?? '');
+
+            if ($value !== '') {
+                $extra[$key] = $value;
+            }
+        }
+
+        $documentValues[$type] = [
+            'number' => trim($post['number'] ?? ''),
+            'series' => trim($post['series'] ?? ''),
+            'issue_date' => $post['issue_date'] ?? '',
+            'expire_date' => $post['expire_date'] ?? '',
+            'issued_by' => trim($post['issued_by'] ?? ''),
+            'extra' => $extra,
+        ];
+    }
+
+    // full_name — производное значение из частей (список, поиск и api/*
+    // читают его как раньше).
     $fullName = trim($employee['last_name'] . ' ' . $employee['first_name'] . ' ' . $employee['middle_name']);
-
-    $db = getDb();
 
     // Подразделение должно принадлежать выбранной организации — на случай
     // подмены значений в обход выпадающего списка.
@@ -85,44 +157,189 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 
-    if ($employee['last_name'] === '' || $employee['first_name'] === '') {
-        $error = 'Укажите фамилию и имя сотрудника';
-    } else {
+    // Новая карточка без имени при автосохранении просто ещё не сохраняется.
+    if ($isAutosave && !$isEdit && $employee['first_name'] === '') {
+        autosaveResponse(['ok' => false, 'skipped' => true]);
+    }
 
-        if ($isEdit) {
-            $stmt = $db->prepare(
-                'UPDATE employees SET full_name = ?, last_name = ?, first_name = ?, middle_name = ?, citizenship = ?, birth_date = ?, organization_id = ?, position = ?, department_id = ?, phone = ?, email = ?, notes = ? WHERE id = ?'
-            );
-            $stmt->execute([
-                $fullName, $employee['last_name'], $employee['first_name'], $employee['middle_name'] ?: null,
-                $employee['citizenship'], $employee['birth_date'], $employee['organization_id'],
-                $employee['position'], $employee['department_id'], $employee['phone'],
-                $employee['email'], $employee['notes'], $employee['id'],
-            ]);
-            logAudit('update', 'employee', (int) $employee['id'], $fullName);
-        } else {
-            $stmt = $db->prepare(
-                'INSERT INTO employees (full_name, last_name, first_name, middle_name, citizenship, birth_date, organization_id, position, department_id, phone, email, notes, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
-            );
-            $stmt->execute([
-                $fullName, $employee['last_name'], $employee['first_name'], $employee['middle_name'] ?: null,
-                $employee['citizenship'], $employee['birth_date'], $employee['organization_id'],
-                $employee['position'], $employee['department_id'], $employee['phone'],
-                $employee['email'], $employee['notes'], currentUser()['id'],
-            ]);
-            logAudit('create', 'employee', (int) $db->lastInsertId(), $fullName);
+    if ($employee['first_name'] === '') {
+        $errors[] = 'Укажите имя сотрудника';
+    }
+
+    if ($employee['irs_number'] !== '' && (!ctype_digit($employee['irs_number']) || strlen($employee['irs_number']) > 18)) {
+        $errors[] = 'Номер ИРС — число (только цифры, до 18 знаков)';
+    }
+
+    // Сканы валидируем и сохраняем до записи в БД, чтобы ошибка скана не
+    // оставляла карточку наполовину сохранённой.
+    $newScans = [];
+
+    if (!$errors && !$isAutosave) {
+        foreach (DOCUMENT_TYPES_ORDER as $type) {
+            $file = $_FILES['scan_' . $type] ?? null;
+
+            if ($file && $file['error'] !== UPLOAD_ERR_NO_FILE) {
+                [$scanData, $scanError] = storeUploadedScan($file);
+
+                if ($scanError) {
+                    $errors[] = DOCUMENT_TYPE_LABELS[$type] . ': ' . $scanError;
+                } else {
+                    $newScans[$type] = $scanData;
+                }
+            }
+        }
+    }
+
+    if ($errors && $isAutosave) {
+        autosaveResponse(['ok' => false, 'errors' => $errors]);
+    }
+
+    if ($errors) {
+        foreach ($newScans as $scanData) {
+            deleteStoredScan($scanData['scan_stored_name']);
+        }
+    } else {
+        $params = [
+            $fullName, $employee['last_name'], $employee['first_name'], $employee['middle_name'] ?: null,
+            $employee['last_name_lat'] ?: null, $employee['first_name_lat'] ?: null, $employee['middle_name_lat'] ?: null,
+            $employee['gender'], $employee['citizenship'], $employee['birth_date'],
+            $employee['birth_country'] ?: null, $employee['birth_place'] ?: null,
+            $employee['residence_country'] ?: null, $employee['visa_country'] ?: null, $employee['visa_city'] ?: null,
+            $employee['foreign_workplace'] ?: null,
+            $employee['irs_number'] !== '' ? ltrim($employee['irs_number'], '0') ?: '0' : null,
+            json_encode(array_filter($stayAddress, static fn($v) => $v !== ''), JSON_UNESCAPED_UNICODE) ?: null,
+            $employee['organization_id'], $employee['region_id'], $employee['work_site_id'], $employee['position'], $employee['department_id'],
+            $employee['phone'], $employee['email'], $employee['notes'],
+        ];
+
+        $db->beginTransaction();
+
+        try {
+            if ($isEdit) {
+                $stmt = $db->prepare(
+                    'UPDATE employees SET full_name = ?, last_name = ?, first_name = ?, middle_name = ?,
+                        last_name_lat = ?, first_name_lat = ?, middle_name_lat = ?, gender = ?, citizenship = ?, birth_date = ?,
+                        birth_country = ?, birth_place = ?, residence_country = ?, visa_country = ?, visa_city = ?,
+                        foreign_workplace = ?, irs_number = ?, stay_address = ?, organization_id = ?, region_id = ?, work_site_id = ?, position = ?, department_id = ?,
+                        phone = ?, email = ?, notes = ? WHERE id = ?'
+                );
+                $stmt->execute(array_merge($params, [$employee['id']]));
+                $employeeId = (int) $employee['id'];
+                $auditAction = 'update';
+            } else {
+                $stmt = $db->prepare(
+                    'INSERT INTO employees (full_name, last_name, first_name, middle_name,
+                        last_name_lat, first_name_lat, middle_name_lat, gender, citizenship, birth_date,
+                        birth_country, birth_place, residence_country, visa_country, visa_city,
+                        foreign_workplace, irs_number, stay_address, organization_id, region_id, work_site_id, position, department_id,
+                        phone, email, notes, created_by)
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+                );
+                $stmt->execute(array_merge($params, [currentUser()['id']]));
+                $employeeId = (int) $db->lastInsertId();
+                $auditAction = 'create';
+            }
+
+            $replacedScans = [];
+
+            foreach (DOCUMENT_TYPES_ORDER as $type) {
+                $v = $documentValues[$type];
+                $existing = $documents[$type] ?? null;
+                $hasExtra = !empty($v['extra']);
+                $isEmpty = $v['number'] === '' && $v['series'] === '' && $v['issue_date'] === ''
+                    && $v['expire_date'] === '' && $v['issued_by'] === '' && !$hasExtra;
+
+                if ($isEmpty && !isset($newScans[$type])) {
+                    // Пустой блок = документа нет. Скан удаляем вместе с записью
+                    // (файл — после коммита).
+                    // При автосохранении пустой блок не удаляет документ (и скан):
+                    // поле могли очистить на время редактирования.
+                    if ($existing && !$isAutosave) {
+                        $db->prepare('DELETE FROM employee_documents WHERE id = ?')->execute([$existing['id']]);
+                        $replacedScans[] = $existing['scan_stored_name'];
+                    }
+
+                    continue;
+                }
+
+                $scan = $newScans[$type] ?? null;
+
+                $db->prepare(
+                    'INSERT INTO employee_documents (employee_id, type, number, series, issue_date, expire_date, issued_by, extra_fields, created_by)
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                     ON DUPLICATE KEY UPDATE number = VALUES(number), series = VALUES(series), issue_date = VALUES(issue_date),
+                        expire_date = VALUES(expire_date), issued_by = VALUES(issued_by), extra_fields = VALUES(extra_fields)'
+                )->execute([
+                    $employeeId, $type, $v['number'] ?: null, $v['series'] ?: null,
+                    $v['issue_date'] ?: null, $v['expire_date'] ?: null, $v['issued_by'] ?: null,
+                    $hasExtra ? json_encode($v['extra'], JSON_UNESCAPED_UNICODE) : null,
+                    currentUser()['id'],
+                ]);
+
+                if ($scan) {
+                    $db->prepare(
+                        'UPDATE employee_documents SET scan_stored_name = ?, scan_original_name = ?, scan_mime_type = ?, scan_size = ?
+                         WHERE employee_id = ? AND type = ?'
+                    )->execute([$scan['scan_stored_name'], $scan['scan_original_name'], $scan['scan_mime_type'], $scan['scan_size'], $employeeId, $type]);
+
+                    if ($existing) {
+                        $replacedScans[] = $existing['scan_stored_name'];
+                    }
+                }
+            }
+
+            $writeAudit = true;
+
+            if ($isAutosave && $auditAction === 'update') {
+                $recentStmt = $db->prepare(
+                    "SELECT 1 FROM audit_log WHERE entity_type = 'employee' AND entity_id = ? AND user_id = ? AND action = 'update'
+                       AND created_at > NOW() - INTERVAL 10 MINUTE LIMIT 1"
+                );
+                $recentStmt->execute([$employeeId, currentUser()['id']]);
+                $writeAudit = !$recentStmt->fetch();
+            }
+
+            if ($writeAudit) {
+                logAudit($auditAction, 'employee', $employeeId, $fullName);
+            }
+
+            $db->commit();
+        } catch (Throwable $e) {
+            $db->rollBack();
+
+            foreach ($newScans as $scanData) {
+                deleteStoredScan($scanData['scan_stored_name']);
+            }
+
+            throw $e;
         }
 
-        header('Location: employees.php');
+        foreach ($replacedScans as $stored) {
+            deleteStoredScan($stored);
+        }
+
+        if ($isAutosave) {
+            autosaveResponse(['ok' => true, 'id' => $employeeId, 'created' => !$isEdit, 'saved_at' => date('H:i:s')]);
+        }
+
+        header('Location: ' . ($isEdit ? 'employee_form.php?id=' . $employeeId . '&saved=1' : 'employee_form.php?id=' . $employeeId . '&created=1'));
         exit;
     }
 }
 
-$organizations = getOrganizations(getDb());
-$allDepartments = getDepartments(getDb());
+$organizations = getOrganizations($db);
+$allDepartments = getDepartments($db);
+$regions = getRegions($db);
+$workSites = getWorkSites($db);
 
-$pageTitle = $isEdit ? 'Редактирование сотрудника' : 'Новый сотрудник';
+$pageTitle = $isEdit ? 'Карточка сотрудника' : 'Новый сотрудник';
+$extraScripts = ['js/employee_autosave.js'];
 require __DIR__ . '/includes/header.php';
+
+function e($value): string
+{
+    return htmlspecialchars((string) $value);
+}
 ?>
 
 <div class="page-header d-print-none mb-3">
@@ -130,89 +347,245 @@ require __DIR__ . '/includes/header.php';
         <?php if (!empty($employee['photo_stored_name'])): ?>
             <span class="avatar avatar-lg rounded" style="background-image: url(employee_photo.php?employee_id=<?php echo (int) $employee['id']; ?>)"></span>
         <?php else: ?>
-            <span class="avatar avatar-lg rounded"><?php echo htmlspecialchars(mb_substr($employee['last_name'] ?? '', 0, 1) . mb_substr($employee['first_name'] ?? '', 0, 1)); ?></span>
+            <span class="avatar avatar-lg rounded"><?php echo e(mb_substr($employee['last_name'] ?? '', 0, 1) . mb_substr($employee['first_name'] ?? '', 0, 1)); ?></span>
         <?php endif; ?>
-        <h2 class="page-title mb-0"><?php echo htmlspecialchars($pageTitle); ?></h2>
+        <h2 class="page-title mb-0"><?php echo e($isEdit && $employee['full_name'] ? $employee['full_name'] : $pageTitle); ?></h2>
     </div>
 </div>
 
 <div class="row justify-content-center">
-    <div class="col-lg-8">
-        <div class="card">
-            <div class="card-body">
-                <?php if ($error): ?>
-                    <div class="alert alert-danger"><?php echo htmlspecialchars($error); ?></div>
-                <?php endif; ?>
+    <div class="col-lg-10">
+        <?php if (isset($_GET['saved']) || isset($_GET['created'])): ?>
+            <div class="alert alert-success"><?php echo isset($_GET['created']) ? 'Сотрудник создан.' : 'Карточка сохранена.'; ?></div>
+        <?php endif; ?>
+        <?php foreach ($errors as $error): ?>
+            <div class="alert alert-danger"><?php echo e($error); ?></div>
+        <?php endforeach; ?>
 
-                <form method="post">
+        <form method="post" enctype="multipart/form-data" id="employee-form" data-employee-id="<?php echo (int) ($employee['id'] ?? 0); ?>">
+            <div class="card">
+                <div class="card-header"><h3 class="card-title">Личные данные</h3></div>
+                <div class="card-body">
                     <div class="row">
                         <div class="col-md-4 mb-3">
-                            <label class="form-label required">Фамилия</label>
-                            <input type="text" class="form-control" name="last_name" value="<?php echo htmlspecialchars($employee['last_name']); ?>" required>
+                            <label class="form-label">Фамилия</label>
+                            <input type="text" class="form-control" name="last_name" value="<?php echo e($employee['last_name']); ?>">
                         </div>
                         <div class="col-md-4 mb-3">
                             <label class="form-label required">Имя</label>
-                            <input type="text" class="form-control" name="first_name" value="<?php echo htmlspecialchars($employee['first_name']); ?>" required>
+                            <input type="text" class="form-control" name="first_name" value="<?php echo e($employee['first_name']); ?>" required>
                         </div>
                         <div class="col-md-4 mb-3">
                             <label class="form-label">Отчество</label>
-                            <input type="text" class="form-control" name="middle_name" value="<?php echo htmlspecialchars($employee['middle_name'] ?? ''); ?>">
-                        </div>
-                    </div>
-                    <div class="row">
-                        <div class="col-md-6 mb-3">
-                            <label class="form-label">Гражданство</label>
-                            <input type="text" class="form-control" name="citizenship" value="<?php echo htmlspecialchars($employee['citizenship'] ?? ''); ?>">
-                        </div>
-                        <div class="col-md-6 mb-3">
-                            <label class="form-label">Дата рождения</label>
-                            <input type="date" class="form-control" name="birth_date" value="<?php echo htmlspecialchars($employee['birth_date'] ?? ''); ?>">
+                            <input type="text" class="form-control" name="middle_name" value="<?php echo e($employee['middle_name']); ?>">
                         </div>
                     </div>
                     <div class="row">
                         <div class="col-md-4 mb-3">
+                            <label class="form-label">Фамилия (лат.)</label>
+                            <input type="text" class="form-control" name="last_name_lat" value="<?php echo e($employee['last_name_lat']); ?>">
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label">Имя (лат.)</label>
+                            <input type="text" class="form-control" name="first_name_lat" value="<?php echo e($employee['first_name_lat']); ?>">
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label">Отчество (лат.)</label>
+                            <input type="text" class="form-control" name="middle_name_lat" value="<?php echo e($employee['middle_name_lat']); ?>">
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-3 mb-3">
+                            <label class="form-label">Пол</label>
+                            <select class="form-select" name="gender">
+                                <option value="">—</option>
+                                <option value="male" <?php echo ($employee['gender'] ?? '') === 'male' ? 'selected' : ''; ?>>Мужской</option>
+                                <option value="female" <?php echo ($employee['gender'] ?? '') === 'female' ? 'selected' : ''; ?>>Женский</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3 mb-3">
+                            <label class="form-label">Дата рождения</label>
+                            <input type="date" class="form-control" name="birth_date" value="<?php echo e($employee['birth_date']); ?>">
+                        </div>
+                        <div class="col-md-3 mb-3">
+                            <label class="form-label">Гражданство</label>
+                            <input type="text" class="form-control" name="citizenship" value="<?php echo e($employee['citizenship']); ?>">
+                        </div>
+                        <div class="col-md-3 mb-3">
+                            <label class="form-label">Государство рождения</label>
+                            <input type="text" class="form-control" name="birth_country" value="<?php echo e($employee['birth_country']); ?>">
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label">Место рождения</label>
+                            <input type="text" class="form-control" name="birth_place" value="<?php echo e($employee['birth_place']); ?>">
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label">Государство постоянного проживания</label>
+                            <input type="text" class="form-control" name="residence_country" value="<?php echo e($employee['residence_country']); ?>">
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label">Место работы за рубежом</label>
+                            <input type="text" class="form-control" name="foreign_workplace" value="<?php echo e($employee['foreign_workplace']); ?>">
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label">Номер ИРС</label>
+                            <input type="text" class="form-control" name="irs_number" inputmode="numeric" pattern="[0-9]*" maxlength="18" value="<?php echo e($employee['irs_number']); ?>">
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Страна получения визы</label>
+                            <input type="text" class="form-control" name="visa_country" value="<?php echo e($employee['visa_country']); ?>">
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Город получения визы</label>
+                            <input type="text" class="form-control" name="visa_city" value="<?php echo e($employee['visa_city']); ?>">
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-3 mb-3">
                             <label class="form-label">Организация</label>
                             <select class="form-select" name="organization_id" id="organization-select">
                                 <option value="">— не указана —</option>
                                 <?php foreach ($organizations as $organization): ?>
-                                    <option value="<?php echo (int) $organization['id']; ?>" <?php echo (int) $employee['organization_id'] === (int) $organization['id'] ? 'selected' : ''; ?>><?php echo htmlspecialchars($organization['name']); ?></option>
+                                    <option value="<?php echo (int) $organization['id']; ?>" <?php echo (int) $employee['organization_id'] === (int) $organization['id'] ? 'selected' : ''; ?>><?php echo e($organization['name']); ?></option>
                                 <?php endforeach; ?>
                             </select>
-                            <div class="form-hint">Управление организациями — <a href="organizations.php">отдельная страница</a>.</div>
+                            <div class="form-hint"><a href="organizations.php">Организации</a></div>
                         </div>
-                        <div class="col-md-4 mb-3">
-                            <label class="form-label">Должность</label>
-                            <input type="text" class="form-control" name="position" value="<?php echo htmlspecialchars($employee['position'] ?? ''); ?>">
-                        </div>
-                        <div class="col-md-4 mb-3">
+                        <div class="col-md-3 mb-3">
                             <label class="form-label">Подразделение</label>
                             <select class="form-select" name="department_id" id="department-select">
                                 <option value="">— не указано —</option>
                             </select>
                         </div>
+                        <div class="col-md-3 mb-3">
+                            <label class="form-label">Регион</label>
+                            <select class="form-select" name="region_id">
+                                <option value="">— не указан —</option>
+                                <?php foreach ($regions as $region): ?>
+                                    <option value="<?php echo (int) $region['id']; ?>" <?php echo (int) $employee['region_id'] === (int) $region['id'] ? 'selected' : ''; ?>><?php echo e($region['name']); ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                            <div class="form-hint"><a href="regions.php">Регионы</a></div>
+                        </div>
+                        <div class="col-md-3 mb-3">
+                            <label class="form-label">Объект</label>
+                            <select class="form-select" name="work_site_id">
+                                <option value="">— не указан —</option>
+                                <?php foreach ($workSites as $site): ?>
+                                    <option value="<?php echo (int) $site['id']; ?>" <?php echo (int) $employee['work_site_id'] === (int) $site['id'] ? 'selected' : ''; ?>><?php echo e($site['name']); ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                            <div class="form-hint"><a href="work_sites.php">Объекты</a></div>
+                        </div>
+                        <div class="col-md-3 mb-3">
+                            <label class="form-label">Должность</label>
+                            <input type="text" class="form-control" name="position" value="<?php echo e($employee['position']); ?>">
+                        </div>
                     </div>
                     <div class="row">
                         <div class="col-md-6 mb-3">
                             <label class="form-label">Телефон</label>
-                            <input type="text" class="form-control" name="phone" value="<?php echo htmlspecialchars($employee['phone'] ?? ''); ?>">
+                            <input type="text" class="form-control" name="phone" value="<?php echo e($employee['phone']); ?>">
                         </div>
                         <div class="col-md-6 mb-3">
                             <label class="form-label">Email</label>
-                            <input type="email" class="form-control" name="email" value="<?php echo htmlspecialchars($employee['email'] ?? ''); ?>">
+                            <input type="email" class="form-control" name="email" value="<?php echo e($employee['email']); ?>">
                         </div>
                     </div>
                     <div class="mb-3">
                         <label class="form-label">Примечания</label>
-                        <textarea class="form-control" name="notes" rows="3"><?php echo htmlspecialchars($employee['notes'] ?? ''); ?></textarea>
+                        <textarea class="form-control" name="notes" rows="2"><?php echo e($employee['notes']); ?></textarea>
                     </div>
-
-                    <div class="form-footer">
-                        <a href="employees.php" class="btn btn-link">Отмена</a>
-                        <button type="submit" class="btn btn-primary">Сохранить</button>
-                    </div>
-                </form>
+                </div>
             </div>
-        </div>
+
+            <div class="card mt-3">
+                <div class="card-header"><h3 class="card-title">Адрес предполагаемого места пребывания</h3></div>
+                <div class="card-body">
+                    <div class="row">
+                        <?php foreach (STAY_ADDRESS_FIELDS as $key => $label): ?>
+                            <div class="col-md-4 mb-3">
+                                <label class="form-label"><?php echo e($label); ?></label>
+                                <input type="text" class="form-control" name="stay_address[<?php echo e($key); ?>]" value="<?php echo e($stayAddress[$key]); ?>">
+                            </div>
+                        <?php endforeach; ?>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card mt-3">
+                <div class="card-header">
+                    <h3 class="card-title">Документы</h3>
+                    <div class="card-subtitle">Один документ каждого типа. Пустой блок — документа нет.</div>
+                </div>
+                <div class="card-body">
+                    <?php foreach (DOCUMENT_TYPES_ORDER as $type): $v = $documentValues[$type]; $doc = $documents[$type] ?? null; $look = DOCUMENT_TYPE_LOOK[$type]; ?>
+                        <div class="doc-block" id="doc-<?php echo e($type); ?>" style="--doc-color: <?php echo e($look['color']); ?>;">
+                            <div class="doc-block-header">
+                                <span class="doc-block-icon"><i class="ti <?php echo e($look['icon']); ?>"></i></span>
+                                <h4 class="doc-block-title"><?php echo e(DOCUMENT_TYPE_LABELS[$type]); ?></h4>
+                                <?php if ($doc): $status = documentStatus($doc['expire_date']); ?>
+                                    <span class="badge <?php echo $status['badgeClass']; ?>"><?php echo e($status['label']); ?></span>
+                                <?php else: ?>
+                                    <span class="badge bg-secondary-lt">Нет данных</span>
+                                <?php endif; ?>
+                            </div>
+                            <div class="doc-block-body">
+                            <div class="row">
+                                <div class="col-md-2 mb-2">
+                                    <label class="form-label">Серия</label>
+                                    <input type="text" class="form-control" name="documents[<?php echo $type; ?>][series]" value="<?php echo e($v['series']); ?>">
+                                </div>
+                                <div class="col-md-3 mb-2">
+                                    <label class="form-label">Номер</label>
+                                    <input type="text" class="form-control" name="documents[<?php echo $type; ?>][number]" value="<?php echo e($v['number']); ?>">
+                                </div>
+                                <div class="col-md-2 mb-2">
+                                    <label class="form-label">Дата выдачи</label>
+                                    <input type="date" class="form-control" name="documents[<?php echo $type; ?>][issue_date]" value="<?php echo e($v['issue_date']); ?>">
+                                </div>
+                                <div class="col-md-2 mb-2">
+                                    <label class="form-label">Действителен до</label>
+                                    <input type="date" class="form-control" name="documents[<?php echo $type; ?>][expire_date]" value="<?php echo e($v['expire_date']); ?>">
+                                </div>
+                                <div class="col-md-3 mb-2">
+                                    <label class="form-label">Кем выдан</label>
+                                    <input type="text" class="form-control" name="documents[<?php echo $type; ?>][issued_by]" value="<?php echo e($v['issued_by']); ?>">
+                                </div>
+                            </div>
+                            <div class="row">
+                                <?php foreach (DOCUMENT_TYPE_EXTRA_FIELDS[$type] as $key => $label): ?>
+                                    <div class="col-md-3 mb-2">
+                                        <label class="form-label"><?php echo e($label); ?></label>
+                                        <input type="text" class="form-control" name="documents[<?php echo $type; ?>][extra][<?php echo e($key); ?>]" value="<?php echo e($v['extra'][$key] ?? ''); ?>">
+                                    </div>
+                                <?php endforeach; ?>
+                                <div class="col-md-6 mb-2">
+                                    <label class="form-label">Скан (JPG, PNG, PDF до 10 МБ)</label>
+                                    <input type="file" class="form-control" name="scan_<?php echo $type; ?>" accept=".jpg,.jpeg,.png,.pdf">
+                                    <?php if ($doc && $doc['scan_stored_name']): ?>
+                                        <div class="form-hint"><a href="document_scan.php?document_id=<?php echo (int) $doc['id']; ?>" target="_blank"><?php echo e($doc['scan_original_name']); ?></a> — загрузка нового файла заменит этот</div>
+                                    <?php endif; ?>
+                                </div>
+                            </div>
+                            </div>
+                        </div>
+                    <?php endforeach; ?>
+                </div>
+            </div>
+
+            <div class="form-footer">
+                <a href="employees.php" class="btn btn-link">К списку</a>
+                <button type="submit" class="btn btn-primary">Сохранить</button>
+                <span class="text-secondary ms-3 small">Изменения сохраняются автоматически (сканы — только кнопкой «Сохранить»). Ctrl+Z — отменить, Ctrl+Shift+Z — вернуть.</span>
+            </div>
+        </form>
 
         <script>
             $(function () {
@@ -255,7 +628,7 @@ require __DIR__ . '/includes/header.php';
                             'size' => 'Файл больше 10 МБ.',
                             'save' => 'Не удалось сохранить файл на сервере.',
                         ];
-                        echo htmlspecialchars($photoErrors[$_GET['photo_error']] ?? 'Не удалось загрузить файл.');
+                        echo e($photoErrors[$_GET['photo_error']] ?? 'Не удалось загрузить файл.');
                         ?>
                     </div>
                 <?php endif; ?>
@@ -275,90 +648,7 @@ require __DIR__ . '/includes/header.php';
             </div>
         </div>
 
-        <div class="card mt-3">
-            <div class="card-header">
-                <h3 class="card-title">Документы сотрудника</h3>
-                <div class="card-actions">
-                    <a href="document_form.php?employee_id=<?php echo (int) $employee['id']; ?>" class="btn btn-primary btn-sm">
-                        <i class="ti ti-plus"></i>
-                        Добавить документ
-                    </a>
-                </div>
-            </div>
-            <div class="table-responsive">
-                <table class="table table-vcenter table-sm card-table">
-                    <thead>
-                        <tr>
-                            <th>Тип</th>
-                            <th>Номер</th>
-                            <th>Паспорт</th>
-                            <th>Детали</th>
-                            <th>Срок действия</th>
-                            <th>Статус</th>
-                            <th></th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <?php if (empty($employeeDocuments)): ?>
-                            <tr><td colspan="7">Документов пока нет</td></tr>
-                        <?php else: foreach ($employeeDocuments as $doc): $status = documentStatus($doc['expire_date']); $extraPairs = documentExtraFieldPairs($doc['type'], $doc['extra_fields']); ?>
-                            <tr>
-                                <td><?php echo htmlspecialchars(DOCUMENT_TYPE_LABELS[$doc['type']] ?? $doc['type']); ?></td>
-                                <td><?php echo htmlspecialchars($doc['number'] ?? ''); ?></td>
-                                <td>
-                                    <?php if ($doc['type'] === 'passport'): ?>
-                                        —
-                                    <?php elseif ($doc['passport_document_id'] && isset($passportNumbersById[$doc['passport_document_id']])): ?>
-                                        №<?php echo htmlspecialchars($passportNumbersById[$doc['passport_document_id']] ?: '—'); ?>
-                                    <?php else: ?>
-                                        <span class="text-danger">не привязан</span>
-                                    <?php endif; ?>
-                                </td>
-                                <td>
-                                    <?php if (empty($extraPairs)): ?>
-                                        <span class="text-secondary">—</span>
-                                    <?php else: ?>
-                                        <div class="extra-field-pairs">
-                                            <?php foreach ($extraPairs as $pair): ?>
-                                                <div class="extra-field-pair"><span class="extra-field-label"><?php echo htmlspecialchars($pair['label']); ?>:</span> <?php echo htmlspecialchars($pair['value']); ?></div>
-                                            <?php endforeach; ?>
-                                        </div>
-                                    <?php endif; ?>
-                                </td>
-                                <td><?php echo htmlspecialchars($doc['expire_date'] ?? '—'); ?></td>
-                                <td><span class="badge <?php echo $status['badgeClass']; ?>"><?php echo htmlspecialchars($status['label']); ?></span></td>
-                                <td class="text-end">
-                                    <a href="document_form.php?id=<?php echo (int) $doc['id']; ?>&employee_id=<?php echo (int) $employee['id']; ?>">Изменить</a>
-                                    <a href="document_generate.php?document_id=<?php echo (int) $doc['id']; ?>" class="ms-2">Скачать .docx</a>
-                                    <?php if (in_array(currentUser()['role'], ['admin', 'hr'], true)): ?>
-                                        <button type="button" class="btn btn-danger btn-sm ms-2" data-delete-document="<?php echo (int) $doc['id']; ?>">Удалить</button>
-                                    <?php endif; ?>
-                                </td>
-                            </tr>
-                        <?php endforeach; endif; ?>
-                    </tbody>
-                </table>
-            </div>
-        </div>
-        <script>
-            $(function () {
-                $('[data-delete-document]').on('click', function () {
-                    if (!confirm('Удалить документ?')) {
-                        return;
-                    }
-
-                    const id = $(this).data('delete-document');
-
-                    $.ajax({
-                        url: 'api/documents.php',
-                        method: 'DELETE',
-                        data: { id: id },
-                    }).done(function () {
-                        location.reload();
-                    });
-                });
-            });
-        </script>
+        <?php require __DIR__ . '/includes/process_card.php'; ?>
         <?php endif; ?>
     </div>
 </div>
